@@ -1,0 +1,3 @@
+Trigger a fresh Feature Debug APK build from the latest feat/watch-progress-cards branch state.
+Source feature commit: e04af1306255e723a64a853e4756001b4c552477
+Triggered: 2026-08-30T23:41:00+02:00
