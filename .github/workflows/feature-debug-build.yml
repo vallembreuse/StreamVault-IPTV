@@ -30,6 +30,9 @@ jobs:
           mkdir -p "$HOME/.android"
           base64 --decode .ci/streamvault-custom-debug.jks.b64 > "$HOME/.android/debug.keystore"
 
+      - name: Apply immediate watched-state refresh
+        run: python3 .ci/apply_watch_return_refresh.py
+
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
