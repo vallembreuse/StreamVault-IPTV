@@ -167,7 +167,7 @@ fun SeriesScreen(
             ReorderTopBar(
                 categoryName = uiState.reorderCategory!!.name,
                 onSave = { viewModel.saveReorder() },
-                onCancel = { viewModel.exitReorderMode() },
+                onCancel = { viewModel.exitCategoryReorderMode() },
                 subtitle = stringResource(R.string.series_reorder_subtitle)
             )
         }
@@ -690,7 +690,7 @@ private fun SeriesVodContent(
                         isLocked = isLocked,
                         onClick = { if (isLocked) onProtectedSeriesClick(series) else onSeriesClick(series) },
                         onLongClick = { onShowDialog(series) },
-                        modifier = if (series.id == fallbackSeriesId) Modifier.focusRequester(initialFocusRequester) else Modifier
+                        modifier = if (series.id == fallbackSeriesId) Modifier.focusRequester(initialContentFocusRequester) else Modifier
                     )
                 }
             }
@@ -846,7 +846,7 @@ private fun SeriesVodContent(
                         onValueChange = onSearchQueryChange,
                         placeholder = stringResource(R.string.series_search_placeholder),
                         onSearch = {},
-                        focusRequester = initialFocusRequester,
+                        focusRequester = initialContentFocusRequester,
                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                     )
                 }
@@ -901,7 +901,7 @@ private fun SeriesVodContent(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(2f / 3f)
-                        .then(if (!showSearchBar && series.id == initialGridSeriesId) Modifier.focusRequester(initialFocusRequester) else Modifier),
+                        .then(if (!showSearchBar && series.id == initialGridSeriesId) Modifier.focusRequester(initialContentFocusRequester) else Modifier),
                     onClick = {
                         if (uiState.isReorderMode) {
                             draggingSeries = if (isDraggingThis) null else series
@@ -1186,7 +1186,7 @@ private fun SeriesVodClassicContent(
                     onValueChange = onSearchQueryChange,
                     placeholder = stringResource(R.string.series_search_placeholder),
                     onSearch = {},
-                    focusRequester = initialFocusRequester,
+                    focusRequester = initialContentFocusRequester,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -1251,7 +1251,7 @@ private fun SeriesVodClassicContent(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .aspectRatio(2f / 3f)
-                                .then(if (!showSearchBar && series.id == initialGridSeriesId) Modifier.focusRequester(initialFocusRequester) else Modifier),
+                                .then(if (!showSearchBar && series.id == initialGridSeriesId) Modifier.focusRequester(initialContentFocusRequester) else Modifier),
                             onClick = {
                                 if (uiState.isReorderMode) {
                                     draggingSeries = if (isDraggingThis) null else series
