@@ -387,8 +387,8 @@ fun EpisodeRowCard(
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
     val previewWidth = if (screenWidth < 700.dp) 124.dp else 164.dp
     val durationMs = episode.durationSeconds.toLong() * 1000L
-    val showProgress = episode.watchProgress > 5000L && durationMs > 0L &&
-        !isPlaybackComplete(episode.watchProgress, durationMs)
+    val isWatched = durationMs > 0L && isPlaybackComplete(episode.watchProgress, durationMs)
+    val showProgress = episode.watchProgress > 5000L && durationMs > 0L && !isWatched
     val displayUrl = episode.coverUrl.takeIf { !it.isNullOrBlank() } ?: fallbackImageUrl
     Box(
         modifier = modifier
@@ -432,6 +432,13 @@ fun EpisodeRowCard(
                     ContentMetadataStrip(
                         values = listOf(stringResource(R.string.label_episode_full, episode.episodeNumber), episode.duration ?: "")
                     )
+                    if (isWatched) {
+                        StatusPill(
+                            label = "✓ Vu",
+                            containerColor = AppColors.Brand,
+                            contentColor = Color.White
+                        )
+                    }
                     episode.plot?.takeIf { it.isNotBlank() }?.let { plot ->
                         Text(
                             text = plot,
