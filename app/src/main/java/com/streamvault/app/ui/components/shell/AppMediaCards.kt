@@ -360,12 +360,43 @@ fun LiveChannelRowSurface(
 
 @Composable
 fun MoviePosterCard(movie: Movie, modifier: Modifier = Modifier) {
-    PosterCard(
-        imageUrl = movie.posterUrl,
-        title = movie.name,
-        subtitle = movie.year,
-        modifier = modifier
-    )
+    val durationMs = movie.durationSeconds.toLong() * 1000L
+    val isWatched = durationMs > 0L && isPlaybackComplete(movie.watchProgress, durationMs)
+    val progress = if (movie.watchProgress > 5000L && durationMs > 0L && !isWatched) {
+        (movie.watchProgress.toFloat() / durationMs).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+
+    Box(modifier = modifier) {
+        PosterCard(
+            imageUrl = movie.posterUrl,
+            title = movie.name,
+            subtitle = movie.year,
+            modifier = Modifier.fillMaxSize()
+        )
+
+        if (isWatched) {
+            StatusPill(
+                label = "✓ Vu",
+                containerColor = AppColors.Brand,
+                contentColor = Color.White,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 8.dp, bottom = 8.dp)
+            )
+        } else if (progress > 0f) {
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(3.dp),
+                color = AppColors.Brand,
+                trackColor = Color.Transparent
+            )
+        }
+    }
 }
 
 @Composable
