@@ -400,11 +400,15 @@ fun MoviePosterCard(movie: Movie, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun SeriesPosterCard(series: Series, modifier: Modifier = Modifier) {
+fun SeriesPosterCard(
+    series: Series,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null
+) {
     PosterCard(
         imageUrl = series.posterUrl,
         title = series.name,
-        subtitle = series.releaseDate ?: series.genre,
+        subtitle = subtitle ?: series.releaseDate ?: series.genre,
         modifier = modifier
     )
 }
