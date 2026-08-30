@@ -127,6 +127,7 @@ fun MovieDetailScreen(
                 movie = movie,
                 hasResume = uiState.hasResume,
                 resumePositionMs = uiState.resumePositionMs,
+                isWatched = uiState.isWatched,
                 isCasting = uiState.isCasting,
                 externalRatings = uiState.externalRatings,
                 isLoadingExternalRatings = uiState.isLoadingExternalRatings,
@@ -142,6 +143,7 @@ fun MovieDetailScreen(
                 onDownload = {},
                 onCast = viewModel::castMovie,
                 onToggleFavorite = viewModel::toggleFavorite,
+                onToggleWatched = viewModel::toggleWatched,
                 onSelectVariant = viewModel::selectMovieVariant,
                 onRelatedClick = onPlay,
                 onBack = onBack,
@@ -156,6 +158,7 @@ private fun MovieDetailContent(
     movie: Movie,
     hasResume: Boolean,
     resumePositionMs: Long,
+    isWatched: Boolean,
     isCasting: Boolean,
     externalRatings: ExternalRatings,
     isLoadingExternalRatings: Boolean,
@@ -165,6 +168,7 @@ private fun MovieDetailContent(
     onDownload: () -> Unit,
     onCast: () -> Unit,
     onToggleFavorite: () -> Unit,
+    onToggleWatched: () -> Unit,
     onSelectVariant: (Long) -> Unit,
     onRelatedClick: (Movie) -> Unit,
     onBack: () -> Unit,
@@ -250,6 +254,7 @@ private fun MovieDetailContent(
                             movie = movie,
                             hasResume = hasResume,
                             resumePositionMs = resumePositionMs,
+                            isWatched = isWatched,
                             isCasting = isCasting,
                             externalRatings = externalRatings,
                             isLoadingExternalRatings = isLoadingExternalRatings,
@@ -262,6 +267,7 @@ private fun MovieDetailContent(
                             onDownload = onDownload,
                             onCast = onCast,
                             onToggleFavorite = onToggleFavorite,
+                            onToggleWatched = onToggleWatched,
                             onSelectVariant = onSelectVariant,
                             playButtonFocusRequester = playButtonFocusRequester,
                             onPlayTrailer = {
@@ -283,6 +289,7 @@ private fun MovieDetailContent(
                             movie = movie,
                             hasResume = hasResume,
                             resumePositionMs = resumePositionMs,
+                            isWatched = isWatched,
                             isCasting = isCasting,
                             externalRatings = externalRatings,
                             isLoadingExternalRatings = isLoadingExternalRatings,
@@ -295,6 +302,7 @@ private fun MovieDetailContent(
                             onDownload = onDownload,
                             onCast = onCast,
                             onToggleFavorite = onToggleFavorite,
+                            onToggleWatched = onToggleWatched,
                             onSelectVariant = onSelectVariant,
                             playButtonFocusRequester = playButtonFocusRequester,
                             onPlayTrailer = {
@@ -385,6 +393,7 @@ private fun MovieDetailHeroText(
     movie: Movie,
     hasResume: Boolean,
     resumePositionMs: Long,
+    isWatched: Boolean,
     isCasting: Boolean,
     externalRatings: ExternalRatings,
     isLoadingExternalRatings: Boolean,
@@ -393,6 +402,7 @@ private fun MovieDetailHeroText(
     onDownload: () -> Unit,
     onCast: () -> Unit,
     onToggleFavorite: () -> Unit,
+    onToggleWatched: () -> Unit,
     onSelectVariant: (Long) -> Unit,
     playButtonFocusRequester: FocusRequester,
     onPlayTrailer: () -> Unit,
@@ -505,6 +515,15 @@ private fun MovieDetailHeroText(
                 ) {
                     Text(stringResource(R.string.movie_detail_trailer))
                 }
+            }
+            TvButton(
+                onClick = onToggleWatched,
+                colors = ButtonDefaults.colors(
+                    containerColor = if (isWatched) AppColors.Brand else AppColors.SurfaceEmphasis,
+                    contentColor = if (isWatched) Color.White else AppColors.TextPrimary
+                )
+            ) {
+                Text(if (isWatched) "↶ Non vu" else "✓ Vu")
             }
             TvIconButton(
                 onClick = onToggleFavorite,

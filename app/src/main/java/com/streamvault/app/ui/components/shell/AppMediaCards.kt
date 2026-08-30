@@ -382,8 +382,8 @@ fun MoviePosterCard(movie: Movie, modifier: Modifier = Modifier) {
                 containerColor = AppColors.Brand,
                 contentColor = Color.White,
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 8.dp, bottom = 8.dp)
+                    .align(Alignment.TopEnd)
+                    .padding(end = 8.dp, top = 8.dp)
             )
         } else if (progress > 0f) {
             LinearProgressIndicator(
