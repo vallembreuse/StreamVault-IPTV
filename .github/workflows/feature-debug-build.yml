@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: temurin
@@ -53,16 +53,21 @@ jobs:
         run: |
           set -euo pipefail
           src="$RUNNER_TEMP/streamvault-custom.jks"
+          cert="$RUNNER_TEMP/streamvault-signing-cert.pem"
           mkdir -p "$HOME/.android"
           printf '%s' "$STREAMVAULT_DEBUG_KEYSTORE_B64" | base64 --decode > "$src"
           chmod 600 "$src"
 
-          actual="$({
-            keytool -list -v \
-              -keystore "$src" \
-              -storepass "$STREAMVAULT_DEBUG_STORE_PASSWORD" \
-              -alias "$STREAMVAULT_DEBUG_KEY_ALIAS"
-          } | awk -F': ' '/SHA 256:/{print $2; exit}' | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')"
+          keytool -exportcert -rfc \
+            -keystore "$src" \
+            -storepass "$STREAMVAULT_DEBUG_STORE_PASSWORD" \
+            -alias "$STREAMVAULT_DEBUG_KEY_ALIAS" \
+            -file "$cert"
+
+          actual="$(openssl x509 -in "$cert" -noout -fingerprint -sha256 \
+            | cut -d= -f2 \
+            | tr -d ':[:space:]' \
+            | tr '[:lower:]' '[:upper:]')"
 
           if [ "$actual" != "$EXPECTED_SIGNING_SHA256" ]; then
             echo "Signing keystore certificate mismatch." >&2
@@ -70,6 +75,8 @@ jobs:
             echo "Actual:   $actual" >&2
             exit 1
           fi
+
+          echo "Verified source keystore certificate: $actual"
 
           rm -f "$HOME/.android/debug.keystore"
           keytool -importkeystore -noprompt \
