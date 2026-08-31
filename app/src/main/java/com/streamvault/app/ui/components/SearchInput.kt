@@ -169,9 +169,6 @@ fun SearchInput(
             .focusProperties {
                 canFocus = enabled
             }
-            .mouseClickable(enabled = enabled, focusRequester = focusRequester) {
-                activateInput()
-            }
             .clickable(enabled = enabled) {
                 activateInput()
             }
@@ -267,11 +264,17 @@ fun SearchInput(
                 },
                 modifier = Modifier
                     .padding(start = 6.dp)
-                    .clickable(enabled = enabled && value.isNotBlank()) {
-                        textFieldValue = TextFieldValue(text = "", selection = TextRange(0))
+                    .mouseClickable(enabled = enabled && value.isNotBlank()) {
+                        keyboardController?.hide()
+                        focusManager.clearFocus(force = true)
+                        textFieldValue = TextFieldValue(
+                            text = "",
+                            selection = TextRange(0),
+                            composition = null
+                        )
                         onValueChange("")
-                        activateInput()
                     }
+                    .padding(12.dp)
             )
         }
     }
