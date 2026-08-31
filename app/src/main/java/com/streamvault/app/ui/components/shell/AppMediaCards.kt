@@ -360,20 +360,55 @@ fun LiveChannelRowSurface(
 
 @Composable
 fun MoviePosterCard(movie: Movie, modifier: Modifier = Modifier) {
-    PosterCard(
-        imageUrl = movie.posterUrl,
-        title = movie.name,
-        subtitle = movie.year,
-        modifier = modifier
-    )
+    val durationMs = movie.durationSeconds.toLong() * 1000L
+    val isWatched = durationMs > 0L && isPlaybackComplete(movie.watchProgress, durationMs)
+    val progress = if (movie.watchProgress > 5000L && durationMs > 0L && !isWatched) {
+        (movie.watchProgress.toFloat() / durationMs).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+
+    Box(modifier = modifier) {
+        PosterCard(
+            imageUrl = movie.posterUrl,
+            title = movie.name,
+            subtitle = movie.year,
+            modifier = Modifier.fillMaxSize()
+        )
+
+        if (isWatched) {
+            StatusPill(
+                label = "✓ Vu",
+                containerColor = AppColors.Brand,
+                contentColor = Color.White,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(end = 8.dp, top = 8.dp)
+            )
+        } else if (progress > 0f) {
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(3.dp),
+                color = AppColors.Brand,
+                trackColor = Color.Transparent
+            )
+        }
+    }
 }
 
 @Composable
-fun SeriesPosterCard(series: Series, modifier: Modifier = Modifier) {
+fun SeriesPosterCard(
+    series: Series,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null
+) {
     PosterCard(
         imageUrl = series.posterUrl,
         title = series.name,
-        subtitle = series.releaseDate ?: series.genre,
+        subtitle = subtitle ?: series.releaseDate ?: series.genre,
         modifier = modifier
     )
 }
@@ -387,8 +422,8 @@ fun EpisodeRowCard(
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
     val previewWidth = if (screenWidth < 700.dp) 124.dp else 164.dp
     val durationMs = episode.durationSeconds.toLong() * 1000L
-    val showProgress = episode.watchProgress > 5000L && durationMs > 0L &&
-        !isPlaybackComplete(episode.watchProgress, durationMs)
+    val isWatched = durationMs > 0L && isPlaybackComplete(episode.watchProgress, durationMs)
+    val showProgress = episode.watchProgress > 5000L && durationMs > 0L && !isWatched
     val displayUrl = episode.coverUrl.takeIf { !it.isNullOrBlank() } ?: fallbackImageUrl
     Box(
         modifier = modifier
@@ -432,6 +467,13 @@ fun EpisodeRowCard(
                     ContentMetadataStrip(
                         values = listOf(stringResource(R.string.label_episode_full, episode.episodeNumber), episode.duration ?: "")
                     )
+                    if (isWatched) {
+                        StatusPill(
+                            label = "✓ Vu",
+                            containerColor = AppColors.Brand,
+                            contentColor = Color.White
+                        )
+                    }
                     episode.plot?.takeIf { it.isNotBlank() }?.let { plot ->
                         Text(
                             text = plot,

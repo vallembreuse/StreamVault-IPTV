@@ -1,0 +1,44 @@
+name: Apply watched detail actions
+
+on:
+  push:
+    branches:
+      - feat/watch-progress-cards
+    paths:
+      - .github/workflows/watch-progress-detail-actions.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/watch-progress-cards
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Repair apply helper
+        run: python3 .ci/repair_apply_watch_detail.py
+      - name: Apply source changes
+        run: python3 .ci/apply_watch_detail.py
+      - name: Compile debug app
+        run: ./gradlew --console=plain :app:compileDebugKotlin
+      - name: Commit source changes
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/streamvault/app/ui/components/shell/AppMediaCards.kt app/src/main/java/com/streamvault/app/ui/screens/movies/MovieDetailScreen.kt app/src/main/java/com/streamvault/app/ui/screens/movies/MovieDetailViewModel.kt
+          git commit -m "feat(vod): add watched toggle to movie detail"
+          git push origin HEAD:feat/watch-progress-cards

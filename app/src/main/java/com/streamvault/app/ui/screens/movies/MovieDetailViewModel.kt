@@ -29,6 +29,8 @@ import com.streamvault.domain.model.ExternalRatings
 import com.streamvault.domain.model.ExternalRatingsLookup
 import com.streamvault.domain.model.MovieDetailPresentationHint
 import com.streamvault.domain.model.Movie
+import com.streamvault.domain.model.PlaybackHistory
+import com.streamvault.domain.model.PlaybackWatchedStatus
 import com.streamvault.domain.model.Result
 import com.streamvault.domain.repository.DownloadManager
 import com.streamvault.domain.repository.ExternalRatingsRepository
@@ -147,6 +149,51 @@ class MovieDetailViewModel @Inject constructor(
                 favoriteRepository.removeFavorite(movie.providerId, movie.id, ContentType.MOVIE)
             }
             _uiState.update { it.copy(movie = movie.copy(isFavorite = newState)) }
+        }
+    }
+
+    fun toggleWatched() {
+        val movie = _uiState.value.movie ?: return
+        viewModelScope.launch {
+            val currentlyWatched = _uiState.value.isWatched
+            val totalDurationMs = movie.durationSeconds.takeIf { it > 0 }?.times(1000L) ?: 0L
+            val result = if (currentlyWatched) {
+                playbackHistoryRepository.removeFromHistory(
+                    contentId = movie.id,
+                    contentType = ContentType.MOVIE,
+                    providerId = movie.providerId
+                )
+            } else {
+                val existing = playbackHistoryRepository.getPlaybackHistory(
+                    contentId = movie.id,
+                    contentType = ContentType.MOVIE,
+                    providerId = movie.providerId
+                )
+                val history = existing ?: PlaybackHistory(
+                    contentId = movie.id,
+                    contentType = ContentType.MOVIE,
+                    providerId = movie.providerId,
+                    title = movie.name,
+                    posterUrl = movie.posterUrl,
+                    streamUrl = movie.streamUrl,
+                    resumePositionMs = movie.watchProgress,
+                    totalDurationMs = totalDurationMs,
+                    lastWatchedAt = System.currentTimeMillis()
+                )
+                playbackHistoryRepository.markAsWatched(history)
+            }
+
+            if (result is Result.Success) {
+                val updatedProgress = if (currentlyWatched) 0L else totalDurationMs
+                _uiState.update { state ->
+                    state.copy(
+                        movie = state.movie?.copy(watchProgress = updatedProgress),
+                        isWatched = !currentlyWatched,
+                        hasResume = false,
+                        resumePositionMs = 0L
+                    )
+                }
+            }
         }
     }
 
@@ -332,9 +379,13 @@ class MovieDetailViewModel @Inject constructor(
         val isFavorite = favoriteRepository.isFavorite(providerId, movie.id, ContentType.MOVIE)
         val movieDurationMs = movie.durationSeconds.takeIf { it > 0 }?.times(1000L) ?: 0L
         val resumePositionMs = playbackHistory?.resumePositionMs ?: movie.watchProgress
-        val hasResume = resumePositionMs > 5000L && !isPlaybackComplete(
+        val resolvedDurationMs = playbackHistory?.totalDurationMs?.takeIf { it > 0L } ?: movieDurationMs
+        val isWatched = playbackHistory?.watchedStatus == PlaybackWatchedStatus.COMPLETED_MANUAL ||
+            playbackHistory?.watchedStatus == PlaybackWatchedStatus.COMPLETED_AUTO ||
+            isPlaybackComplete(progressMs = resumePositionMs, totalDurationMs = resolvedDurationMs)
+        val hasResume = !isWatched && resumePositionMs > 5000L && !isPlaybackComplete(
             progressMs = resumePositionMs,
-            totalDurationMs = playbackHistory?.totalDurationMs?.takeIf { it > 0L } ?: movieDurationMs
+            totalDurationMs = resolvedDurationMs
         )
         _uiState.update {
             it.copy(
@@ -342,7 +393,8 @@ class MovieDetailViewModel @Inject constructor(
                 movie = movie.copy(isFavorite = isFavorite),
                 error = null,
                 hasResume = hasResume,
-                resumePositionMs = if (hasResume) resumePositionMs else 0L
+                resumePositionMs = if (hasResume) resumePositionMs else 0L,
+                isWatched = isWatched
             )
         }
     }
@@ -354,6 +406,7 @@ data class MovieDetailUiState(
     val error: String? = null,
     val hasResume: Boolean = false,
     val resumePositionMs: Long = 0L,
+    val isWatched: Boolean = false,
     val isCasting: Boolean = false,
     val isLoadingExternalRatings: Boolean = false,
     val externalRatings: ExternalRatings = ExternalRatings.unavailable(),

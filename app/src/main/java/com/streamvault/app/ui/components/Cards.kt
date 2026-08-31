@@ -506,6 +506,7 @@ fun SeriesCard(
         if (!isLocked) {
             SeriesPosterCard(
                 series = series,
+                subtitle = subtitle,
                 modifier = Modifier.fillMaxSize()
             )
         } else {

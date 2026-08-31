@@ -54,6 +54,7 @@ import com.streamvault.app.ui.theme.*
 import com.streamvault.domain.model.Category
 import com.streamvault.domain.model.LibraryFilterType
 import com.streamvault.domain.model.LibrarySortBy
+import com.streamvault.domain.model.PlaybackHistory
 import com.streamvault.domain.model.Series
 import kotlinx.coroutines.launch
 import androidx.compose.ui.res.stringResource
@@ -618,6 +619,8 @@ private fun SeriesVodContent(
                         val isLocked = isSeriesLocked(series)
                         SeriesCard(
                             series = series,
+                            watchProgress = uiState.seriesCardProgress(series),
+                            subtitle = uiState.seriesCardSubtitle(series),
                             isLocked = isLocked,
                             onClick = { if (isLocked) onProtectedSeriesClick(series) else onSeriesClick(series) },
                             onLongClick = { onShowDialog(series) },
@@ -637,6 +640,8 @@ private fun SeriesVodContent(
                         val isLocked = isSeriesLocked(series)
                         SeriesCard(
                             series = series,
+                            watchProgress = uiState.seriesCardProgress(series),
+                            subtitle = uiState.seriesCardSubtitle(series),
                             isLocked = isLocked,
                             onClick = { if (isLocked) onProtectedSeriesClick(series) else onSeriesClick(series) },
                             onLongClick = { onShowDialog(series) }
@@ -655,6 +660,8 @@ private fun SeriesVodContent(
                         val isLocked = isSeriesLocked(series)
                         SeriesCard(
                             series = series,
+                            watchProgress = uiState.seriesCardProgress(series),
+                            subtitle = uiState.seriesCardSubtitle(series),
                             isLocked = isLocked,
                             onClick = { if (isLocked) onProtectedSeriesClick(series) else onSeriesClick(series) },
                             onLongClick = { onShowDialog(series) }
@@ -678,6 +685,8 @@ private fun SeriesVodContent(
                     val isLocked = isSeriesLocked(series)
                     SeriesCard(
                         series = series,
+                        watchProgress = uiState.seriesCardProgress(series),
+                        subtitle = uiState.seriesCardSubtitle(series),
                         isLocked = isLocked,
                         onClick = { if (isLocked) onProtectedSeriesClick(series) else onSeriesClick(series) },
                         onLongClick = { onShowDialog(series) },
@@ -884,6 +893,8 @@ private fun SeriesVodContent(
                 val isDraggingThis = draggingSeries == series
                 SeriesCard(
                     series = series,
+                    watchProgress = uiState.seriesCardProgress(series),
+                    subtitle = uiState.seriesCardSubtitle(series),
                     isLocked = isLocked,
                     isReorderMode = uiState.isReorderMode,
                     isDragging = isDraggingThis,
@@ -1232,6 +1243,8 @@ private fun SeriesVodClassicContent(
                         val isDraggingThis = draggingSeries == series
                         SeriesCard(
                             series = series,
+                            watchProgress = uiState.seriesCardProgress(series),
+                            subtitle = uiState.seriesCardSubtitle(series),
                             isLocked = isLocked,
                             isReorderMode = uiState.isReorderMode,
                             isDragging = isDraggingThis,
@@ -1313,3 +1326,23 @@ private fun seriesSortChips(): List<SelectionChip> {
 private fun Series.rawSeriesIdsForNavigation(): List<Long> =
     variants.map { it.rawSeriesId }.ifEmpty { listOf(selectedVariantId ?: id) }
 
+private fun SeriesUiState.seriesCardHistory(series: Series): PlaybackHistory? {
+    val rawIds = series.rawSeriesIdsForNavigation().toSet()
+    return continueWatching
+        .asSequence()
+        .filter { history -> (history.seriesId ?: history.contentId) in rawIds }
+        .maxByOrNull { it.lastWatchedAt }
+}
+
+private fun SeriesUiState.seriesCardProgress(series: Series): Float {
+    val history = seriesCardHistory(series) ?: return 0f
+    if (history.totalDurationMs <= 0L || history.resumePositionMs <= 0L) return 0f
+    return (history.resumePositionMs.toFloat() / history.totalDurationMs.toFloat()).coerceIn(0f, 1f)
+}
+
+private fun SeriesUiState.seriesCardSubtitle(series: Series): String? {
+    val history = seriesCardHistory(series) ?: return null
+    val season = history.seasonNumber ?: return null
+    val episode = history.episodeNumber ?: return null
+    return "S%02d • E%02d".format(season, episode)
+}
