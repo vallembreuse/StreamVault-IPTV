@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feat/watch-progress-cards
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -11,6 +12,12 @@ permissions:
 jobs:
   build-debug:
     runs-on: ubuntu-latest
+    env:
+      EXPECTED_SIGNING_SHA256: 11C98FBE9C83A097E88A8649B6DC9EC1EE86BC73EA1AF097BE8055B937884571
+      STREAMVAULT_DEBUG_KEYSTORE_B64: ${{ secrets.STREAMVAULT_DEBUG_KEYSTORE_B64 }}
+      STREAMVAULT_DEBUG_STORE_PASSWORD: ${{ secrets.STREAMVAULT_DEBUG_STORE_PASSWORD }}
+      STREAMVAULT_DEBUG_KEY_ALIAS: ${{ secrets.STREAMVAULT_DEBUG_KEY_ALIAS }}
+      STREAMVAULT_DEBUG_KEY_PASSWORD: ${{ secrets.STREAMVAULT_DEBUG_KEY_PASSWORD }}
 
     steps:
       - uses: actions/checkout@v4
@@ -25,10 +32,57 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Install stable debug signing key
+      - name: Validate signing secrets
+        shell: bash
         run: |
+          set -euo pipefail
+          for name in \
+            STREAMVAULT_DEBUG_KEYSTORE_B64 \
+            STREAMVAULT_DEBUG_STORE_PASSWORD \
+            STREAMVAULT_DEBUG_KEY_ALIAS \
+            STREAMVAULT_DEBUG_KEY_PASSWORD
+          do
+            if [ -z "${!name:-}" ]; then
+              echo "Missing required GitHub Actions secret: $name" >&2
+              exit 1
+            fi
+          done
+
+      - name: Install stable debug signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          src="$RUNNER_TEMP/streamvault-custom.jks"
           mkdir -p "$HOME/.android"
-          base64 --decode .ci/streamvault-custom-debug.jks.b64 > "$HOME/.android/debug.keystore"
+          printf '%s' "$STREAMVAULT_DEBUG_KEYSTORE_B64" | base64 --decode > "$src"
+          chmod 600 "$src"
+
+          actual="$({
+            keytool -list -v \
+              -keystore "$src" \
+              -storepass "$STREAMVAULT_DEBUG_STORE_PASSWORD" \
+              -alias "$STREAMVAULT_DEBUG_KEY_ALIAS"
+          } | awk -F': ' '/SHA 256:/{print $2; exit}' | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')"
+
+          if [ "$actual" != "$EXPECTED_SIGNING_SHA256" ]; then
+            echo "Signing keystore certificate mismatch." >&2
+            echo "Expected: $EXPECTED_SIGNING_SHA256" >&2
+            echo "Actual:   $actual" >&2
+            exit 1
+          fi
+
+          rm -f "$HOME/.android/debug.keystore"
+          keytool -importkeystore -noprompt \
+            -srckeystore "$src" \
+            -srcstorepass "$STREAMVAULT_DEBUG_STORE_PASSWORD" \
+            -srcalias "$STREAMVAULT_DEBUG_KEY_ALIAS" \
+            -srckeypass "$STREAMVAULT_DEBUG_KEY_PASSWORD" \
+            -destkeystore "$HOME/.android/debug.keystore" \
+            -deststoretype PKCS12 \
+            -deststorepass android \
+            -destkeypass android \
+            -destalias androiddebugkey
+          chmod 600 "$HOME/.android/debug.keystore"
 
       - name: Apply immediate watched-state refresh
         run: python3 .ci/apply_watch_return_refresh.py
@@ -39,9 +93,39 @@ jobs:
       - name: Build debug APK
         run: ./gradlew --console=plain :app:assembleDebug
 
+      - name: Verify APK signing certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="$(find app/build/outputs/apk/debug -maxdepth 1 -name '*.apk' -type f | head -n 1)"
+          if [ -z "$apk" ]; then
+            echo "No debug APK found." >&2
+            exit 1
+          fi
+
+          apksigner="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          if [ -z "$apksigner" ]; then
+            echo "apksigner not found in Android SDK build-tools." >&2
+            exit 1
+          fi
+
+          actual="$($apksigner verify --print-certs "$apk" \
+            | awk -F': ' '/Signer #1 certificate SHA-256 digest:/{print $2; exit}' \
+            | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')"
+
+          if [ "$actual" != "$EXPECTED_SIGNING_SHA256" ]; then
+            echo "Built APK certificate mismatch." >&2
+            echo "Expected: $EXPECTED_SIGNING_SHA256" >&2
+            echo "Actual:   $actual" >&2
+            exit 1
+          fi
+
+          echo "Verified stable APK signing certificate: $actual"
+          sha256sum "$apk"
+
       - name: Upload debug APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: watch-progress-debug-apk
+          name: watch-progress-debug-apk-${{ github.sha }}
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
