@@ -15,4 +15,20 @@
     <string name="settings_nas_transfer_delete_after">Supprimer le fichier local après transfert</string>
     <string name="settings_nas_transfer_delete_after_desc">Uniquement après copie terminée et validée côté NAS.</string>
     <string name="settings_nas_transfer_secure_storage_unavailable">Le stockage sécurisé des identifiants est indisponible. Le mot de passe ne peut pas être enregistré sur cet appareil.</string>
+    <string name="settings_nas_transfer_host_trust_desc">Le premier test réussi mémorise la clé SSH du NAS. Si cette clé change ensuite, StreamVault bloque la connexion tant que tu n’as pas explicitement oublié la clé enregistrée.</string>
+    <string name="settings_nas_transfer_test_connection">Tester la connexion</string>
+    <string name="settings_nas_transfer_testing">Test en cours…</string>
+    <string name="settings_nas_transfer_test_success">Connexion réussie. L’accès au NAS et le dossier de destination sont prêts.</string>
+    <string name="settings_nas_transfer_test_success_trusted">Connexion réussie. L’accès au NAS est prêt et cette clé SSH est maintenant mémorisée.</string>
+    <string name="settings_nas_transfer_test_invalid">Renseigne d’abord l’adresse du NAS, le port SSH, l’utilisateur, le mot de passe et le dossier de destination.</string>
+    <string name="settings_nas_transfer_test_wifi_required">Connecte l’appareil au Wi-Fi avant de tester le transfert NAS.</string>
+    <string name="settings_nas_transfer_test_auth_failed">L’authentification SSH a échoué. Vérifie l’utilisateur et le mot de passe.</string>
+    <string name="settings_nas_transfer_test_host_key_changed">L’identité SSH du NAS a changé. La connexion est bloquée. N’oublie la clé enregistrée que si tu sais que le NAS a été modifié ou réinstallé.</string>
+    <string name="settings_nas_transfer_test_destination_unavailable">Le NAS répond, mais le dossier de destination est introuvable ou inaccessible.</string>
+    <string name="settings_nas_transfer_test_destination_not_directory">La destination configurée existe mais ce n’est pas un dossier.</string>
+    <string name="settings_nas_transfer_test_destination_not_writable">Le compte NAS n’a pas les droits d’écriture dans le dossier de destination.</string>
+    <string name="settings_nas_transfer_test_network_error">Impossible de joindre le NAS. Vérifie le Wi-Fi, l’adresse du NAS et le port SSH.</string>
+    <string name="settings_nas_transfer_test_unknown">Le test SFTP a échoué pour une raison inattendue.</string>
+    <string name="settings_nas_transfer_host_fingerprint">Empreinte SSH : %1$s</string>
+    <string name="settings_nas_transfer_forget_host_key">Oublier la clé NAS enregistrée</string>
 </resources>
