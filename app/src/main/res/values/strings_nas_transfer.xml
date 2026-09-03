@@ -15,4 +15,20 @@
     <string name="settings_nas_transfer_delete_after">Delete local file after transfer</string>
     <string name="settings_nas_transfer_delete_after_desc">Only after the NAS copy has been completed and validated.</string>
     <string name="settings_nas_transfer_secure_storage_unavailable">Secure credential storage is unavailable. The password cannot be saved on this device.</string>
+    <string name="settings_nas_transfer_host_trust_desc">The first successful test remembers the NAS SSH host key. If that key changes later, StreamVault blocks the connection until you explicitly forget the saved key.</string>
+    <string name="settings_nas_transfer_test_connection">Test connection</string>
+    <string name="settings_nas_transfer_testing">Testing…</string>
+    <string name="settings_nas_transfer_test_success">Connection successful. NAS access and destination folder are ready.</string>
+    <string name="settings_nas_transfer_test_success_trusted">Connection successful. NAS access is ready and this SSH host key is now remembered.</string>
+    <string name="settings_nas_transfer_test_invalid">Complete the NAS address, SSH port, username, password, and destination folder first.</string>
+    <string name="settings_nas_transfer_test_wifi_required">Connect the device to Wi-Fi before testing the NAS transfer.</string>
+    <string name="settings_nas_transfer_test_auth_failed">SSH authentication failed. Check the username and password.</string>
+    <string name="settings_nas_transfer_test_host_key_changed">The NAS SSH identity has changed. The connection is blocked. Only forget the saved key if you know the NAS was changed or reinstalled.</string>
+    <string name="settings_nas_transfer_test_destination_unavailable">The NAS is reachable, but the destination folder cannot be found or opened.</string>
+    <string name="settings_nas_transfer_test_destination_not_directory">The configured destination exists but is not a folder.</string>
+    <string name="settings_nas_transfer_test_destination_not_writable">The destination folder is not writable with this NAS account.</string>
+    <string name="settings_nas_transfer_test_network_error">The NAS could not be reached. Check Wi-Fi, the NAS address, and the SSH port.</string>
+    <string name="settings_nas_transfer_test_unknown">The SFTP test failed for an unexpected reason.</string>
+    <string name="settings_nas_transfer_host_fingerprint">SSH fingerprint: %1$s</string>
+    <string name="settings_nas_transfer_forget_host_key">Forget saved NAS key</string>
 </resources>
