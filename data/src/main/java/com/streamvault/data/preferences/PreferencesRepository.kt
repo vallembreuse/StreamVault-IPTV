@@ -45,6 +45,10 @@ import com.streamvault.domain.model.RemoteShortcutPreferences
 import com.streamvault.domain.model.RemoteShortcutProfile
 import com.streamvault.domain.model.RemoteShortcutSelection
 import com.streamvault.domain.model.SearchHistoryScope
+import com.streamvault.domain.model.NasAuthenticationMethod
+import com.streamvault.domain.model.NasHostKeyTrust
+import com.streamvault.domain.model.NasLocalFilePolicy
+import com.streamvault.domain.model.NasTransferSettings
 import com.streamvault.domain.model.TimeshiftBackendPreference
 import com.streamvault.domain.manager.ParentalPinVerifier
 import com.streamvault.domain.manager.ParentalControlSessionState
@@ -280,6 +284,19 @@ class PreferencesRepository @Inject constructor(
         val RECORDING_PADDING_AFTER_MINUTES = intPreferencesKey("recording_padding_after_minutes")
         val DOWNLOAD_TREE_URI = stringPreferencesKey("download_tree_uri")
         val MAX_CONCURRENT_STREAMS = intPreferencesKey("max_concurrent_streams")
+        // NAS configuration is deliberately limited to non-sensitive values. The password is
+        // stored by AndroidNasCredentialStore in a separate Keystore-encrypted DataStore.
+        val NAS_TRANSFER_ENABLED = booleanPreferencesKey("nas_transfer_enabled")
+        val NAS_TRANSFER_HOST = stringPreferencesKey("nas_transfer_host")
+        val NAS_TRANSFER_PORT = intPreferencesKey("nas_transfer_port")
+        val NAS_TRANSFER_USERNAME = stringPreferencesKey("nas_transfer_username")
+        val NAS_TRANSFER_AUTH_METHOD = stringPreferencesKey("nas_transfer_auth_method")
+        val NAS_TRANSFER_REMOTE_DIRECTORY = stringPreferencesKey("nas_transfer_remote_directory")
+        val NAS_TRANSFER_LOCAL_FILE_POLICY = stringPreferencesKey("nas_transfer_local_file_policy")
+        val NAS_TRANSFER_TRUSTED_HOST = stringPreferencesKey("nas_transfer_trusted_host")
+        val NAS_TRANSFER_TRUSTED_PORT = intPreferencesKey("nas_transfer_trusted_port")
+        val NAS_TRANSFER_TRUSTED_ALGORITHM = stringPreferencesKey("nas_transfer_trusted_algorithm")
+        val NAS_TRANSFER_TRUSTED_FINGERPRINT = stringPreferencesKey("nas_transfer_trusted_fingerprint")
         val LAST_APP_UPDATE_CHECK_TIMESTAMP = longPreferencesKey("last_app_update_check_timestamp")
         val LAST_APP_UPDATE_ATTEMPT_TIMESTAMP = longPreferencesKey("last_app_update_attempt_timestamp")
         val LAST_APP_UPDATE_FAILURE_TIMESTAMP = longPreferencesKey("last_app_update_failure_timestamp")
@@ -791,6 +808,39 @@ class PreferencesRepository @Inject constructor(
         (preferences[PreferencesKeys.MAX_CONCURRENT_STREAMS] ?: 2).coerceIn(1, 4)
     }
 
+    val nasTransferSettings: Flow<NasTransferSettings> = context.dataStore.data.map { preferences ->
+        val host = preferences[PreferencesKeys.NAS_TRANSFER_HOST].orEmpty().trim()
+        val port = (preferences[PreferencesKeys.NAS_TRANSFER_PORT] ?: NasTransferSettings.DEFAULT_PORT)
+            .takeIf { it in 1..65_535 } ?: NasTransferSettings.DEFAULT_PORT
+        val trustedHost = preferences[PreferencesKeys.NAS_TRANSFER_TRUSTED_HOST]
+        val trustedPort = preferences[PreferencesKeys.NAS_TRANSFER_TRUSTED_PORT]
+        val trustedAlgorithm = preferences[PreferencesKeys.NAS_TRANSFER_TRUSTED_ALGORITHM]
+        val trustedFingerprint = preferences[PreferencesKeys.NAS_TRANSFER_TRUSTED_FINGERPRINT]
+        val trustedHostKey = if (
+            !trustedHost.isNullOrBlank() && trustedPort != null &&
+            trustedPort in 1..65_535 && trustedHost == host && trustedPort == port &&
+            !trustedAlgorithm.isNullOrBlank() && !trustedFingerprint.isNullOrBlank()
+        ) {
+            NasHostKeyTrust(trustedHost, trustedPort, trustedAlgorithm, trustedFingerprint)
+        } else {
+            null
+        }
+        NasTransferSettings(
+            enabled = preferences[PreferencesKeys.NAS_TRANSFER_ENABLED] ?: false,
+            host = host,
+            port = port,
+            username = preferences[PreferencesKeys.NAS_TRANSFER_USERNAME].orEmpty().trim(),
+            authenticationMethod = preferences[PreferencesKeys.NAS_TRANSFER_AUTH_METHOD]
+                ?.let { saved -> NasAuthenticationMethod.entries.firstOrNull { it.name == saved } }
+                ?: NasAuthenticationMethod.PASSWORD,
+            remoteDirectory = preferences[PreferencesKeys.NAS_TRANSFER_REMOTE_DIRECTORY].orEmpty().trim(),
+            localFilePolicy = preferences[PreferencesKeys.NAS_TRANSFER_LOCAL_FILE_POLICY]
+                ?.let { saved -> NasLocalFilePolicy.entries.firstOrNull { it.name == saved } }
+                ?: NasLocalFilePolicy.KEEP_LOCAL,
+            trustedHostKey = trustedHostKey
+        )
+    }
+
     suspend fun setZapAutoRevert(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.ZAP_AUTO_REVERT] = enabled
@@ -829,6 +879,31 @@ class PreferencesRepository @Inject constructor(
     suspend fun setMaxConcurrentStreams(count: Int) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.MAX_CONCURRENT_STREAMS] = count.coerceIn(1, 4)
+        }
+    }
+
+    suspend fun setNasTransferSettings(settings: NasTransferSettings) {
+        val normalized = settings.normalized()
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.NAS_TRANSFER_ENABLED] = normalized.enabled
+            preferences[PreferencesKeys.NAS_TRANSFER_HOST] = normalized.host
+            preferences[PreferencesKeys.NAS_TRANSFER_PORT] = normalized.port
+            preferences[PreferencesKeys.NAS_TRANSFER_USERNAME] = normalized.username
+            preferences[PreferencesKeys.NAS_TRANSFER_AUTH_METHOD] = normalized.authenticationMethod.name
+            preferences[PreferencesKeys.NAS_TRANSFER_REMOTE_DIRECTORY] = normalized.remoteDirectory
+            preferences[PreferencesKeys.NAS_TRANSFER_LOCAL_FILE_POLICY] = normalized.localFilePolicy.name
+            val trust = normalized.trustedHostKey
+            if (trust == null) {
+                preferences.remove(PreferencesKeys.NAS_TRANSFER_TRUSTED_HOST)
+                preferences.remove(PreferencesKeys.NAS_TRANSFER_TRUSTED_PORT)
+                preferences.remove(PreferencesKeys.NAS_TRANSFER_TRUSTED_ALGORITHM)
+                preferences.remove(PreferencesKeys.NAS_TRANSFER_TRUSTED_FINGERPRINT)
+            } else {
+                preferences[PreferencesKeys.NAS_TRANSFER_TRUSTED_HOST] = trust.host
+                preferences[PreferencesKeys.NAS_TRANSFER_TRUSTED_PORT] = trust.port
+                preferences[PreferencesKeys.NAS_TRANSFER_TRUSTED_ALGORITHM] = trust.algorithm
+                preferences[PreferencesKeys.NAS_TRANSFER_TRUSTED_FINGERPRINT] = trust.fingerprint
+            }
         }
     }
 

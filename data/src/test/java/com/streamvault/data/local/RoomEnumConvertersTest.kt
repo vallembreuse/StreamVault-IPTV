@@ -7,6 +7,7 @@ import com.streamvault.domain.model.GuideSourcePolicy
 import com.streamvault.domain.model.ProviderEpgSyncMode
 import com.streamvault.domain.model.ProviderStatus
 import com.streamvault.domain.model.ProviderType
+import com.streamvault.domain.model.NasTransferStatus
 import org.junit.Test
 
 class RoomEnumConvertersTest {
@@ -40,5 +41,7 @@ class RoomEnumConvertersTest {
         assertThat(converters.toGuideSourcePolicy("provider_only")).isEqualTo(GuideSourcePolicy.PROVIDER_ONLY)
         assertThat(converters.toChannelLogoSourcePolicy("supplier_preferred")).isEqualTo(ChannelLogoSourcePolicy.SUPPLIER_PREFERRED)
         assertThat(converters.toContentType("series_episode")).isEqualTo(ContentType.SERIES_EPISODE)
+        assertThat(converters.toNasTransferStatus("interrupted")).isEqualTo(NasTransferStatus.INTERRUPTED)
+        assertThat(converters.toNasTransferStatus("unrecognised")).isEqualTo(NasTransferStatus.FAILED)
     }
 }

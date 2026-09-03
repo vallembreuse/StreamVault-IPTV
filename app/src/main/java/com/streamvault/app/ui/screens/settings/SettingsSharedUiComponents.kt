@@ -35,6 +35,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
@@ -178,7 +180,8 @@ internal fun CompactSettingsActionChip(
 internal fun EpgSourceTextField(
     value: String,
     onValueChange: (String) -> Unit,
-    placeholder: String
+    placeholder: String,
+    obscureText: Boolean = false
 ) {
     val isTelevisionDevice = com.streamvault.app.device.rememberIsTelevisionDevice()
     val focusRequester = remember { FocusRequester() }
@@ -280,6 +283,7 @@ internal fun EpgSourceTextField(
                 },
                 textStyle = MaterialTheme.typography.bodyMedium.copy(color = Color.White),
                 singleLine = true,
+                visualTransformation = if (obscureText) PasswordVisualTransformation() else VisualTransformation.None,
                 cursorBrush = SolidColor(Primary),
                 modifier = Modifier
                     .fillMaxWidth()

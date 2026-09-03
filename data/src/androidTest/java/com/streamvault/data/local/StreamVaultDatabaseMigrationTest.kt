@@ -1978,6 +1978,36 @@ class StreamVaultDatabaseMigrationTest {
         migrated.close()
     }
 
+    @Test
+    fun migrate77To78_createsNasTransferLedgerWithoutChangingExistingData() {
+        val name = "streamvault-77-78-nas-transfer-ledger"
+        migrationTestHelper.createDatabase(name, 77).apply {
+            execSQL(
+                """
+                INSERT INTO downloads (
+                    id, provider_id, content_type, content_id, content_name, stream_url, status,
+                    bytes_written, supports_resume, retry_count, created_at, owner_epoch
+                ) VALUES ('download-before-nas', 1, 'MOVIE', 1, 'Existing movie', 'https://example.invalid/movie',
+                    'COMPLETED', 100, 0, 0, 1, 0)
+                """.trimIndent()
+            )
+            close()
+        }
+
+        val migrated = migrationTestHelper.runMigrationsAndValidate(
+            name,
+            78,
+            true,
+            StreamVaultDatabase.MIGRATION_77_78
+        )
+
+        assertEquals(1, countRows(migrated, "SELECT COUNT(*) FROM downloads WHERE id='download-before-nas'"))
+        assertEquals(1, countRows(migrated, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='nas_transfers'"))
+        assertEquals(1, countRows(migrated, "SELECT COUNT(*) FROM pragma_index_list('nas_transfers') WHERE name='index_nas_transfers_status'"))
+        assertEquals(1, countRows(migrated, "SELECT COUNT(*) FROM pragma_index_list('nas_transfers') WHERE name='index_nas_transfers_download_id'"))
+        migrated.close()
+    }
+
     private fun SupportSQLiteDatabase.insertProvider72(id: Long, name: String, type: String) {
         execSQL(
             """

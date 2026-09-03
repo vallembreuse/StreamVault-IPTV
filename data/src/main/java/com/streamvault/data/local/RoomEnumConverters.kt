@@ -15,6 +15,7 @@ import com.streamvault.domain.model.ProviderEpgSyncMode
 import com.streamvault.domain.model.ProviderStatus
 import com.streamvault.domain.model.ProviderType
 import com.streamvault.domain.model.ProviderXtreamLiveSyncMode
+import com.streamvault.domain.model.NasTransferStatus
 import com.streamvault.domain.model.ProgramReminderDeliveryState
 import com.streamvault.domain.model.StalkerAuthMode
 import com.streamvault.domain.model.StalkerCatalogMode
@@ -217,6 +218,13 @@ class RoomEnumConverters {
     @TypeConverter
     fun toContentType(value: String?): ContentType? =
         enumValueOrDefault(value, ContentType.LIVE, contentTypeAliases())
+
+    @TypeConverter
+    fun fromNasTransferStatus(value: NasTransferStatus?): String? = value?.name
+
+    @TypeConverter
+    fun toNasTransferStatus(value: String?): NasTransferStatus? =
+        enumValueOrDefault(value, NasTransferStatus.FAILED)
 
     @TypeConverter
     fun fromCatalogLayout(value: CatalogLayout?): String? = value?.name

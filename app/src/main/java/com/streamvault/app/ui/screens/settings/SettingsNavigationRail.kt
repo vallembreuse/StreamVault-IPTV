@@ -56,6 +56,11 @@ internal fun SettingsNavigationRail(
             accent = Color(0xFFEF5350)
         ),
         SettingsNavEntry(
+            label = stringResource(R.string.settings_nas_transfer_title),
+            icon = "N",
+            accent = Color(0xFF26C6DA)
+        ),
+        SettingsNavEntry(
             label = stringResource(R.string.settings_backup_restore),
             icon = "B",
             accent = Color(0xFF42A5F5)
