@@ -1,5 +1,41 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
+    <string name="settings_nas_transfer_title">Transfert NAS</string>
+    <string name="settings_nas_transfer_subtitle">Configurez une destination SFTP sécurisée pour les téléchargements terminés.</string>
+    <string name="settings_nas_transfer_enable">Activer le transfert NAS</string>
+    <string name="settings_nas_transfer_enabled">Activé</string>
+    <string name="settings_nas_transfer_disabled">Désactivé</string>
+    <string name="settings_nas_transfer_configuration">Configuration NAS</string>
+    <string name="settings_nas_transfer_configuration_subtitle">Le dossier distant est interprété par le serveur SFTP. Les mots de passe restent séparés et chiffrés.</string>
+    <string name="settings_nas_transfer_not_configured">Non configuré</string>
+    <string name="settings_nas_transfer_host">Hôte ou adresse</string>
+    <string name="settings_nas_transfer_port">Port SSH</string>
+    <string name="settings_nas_transfer_username">Nom d’utilisateur</string>
+    <string name="settings_nas_transfer_authentication">Authentification</string>
+    <string name="settings_nas_transfer_authentication_password">Mot de passe (v1)</string>
+    <string name="settings_nas_transfer_password">Mot de passe SSH</string>
+    <string name="settings_nas_transfer_password_keep">Nouveau mot de passe (laisser vide pour conserver le mot de passe enregistré)</string>
+    <string name="settings_nas_transfer_password_configured">Configuré de façon sécurisée</string>
+    <string name="settings_nas_transfer_password_missing">Manquant</string>
+    <string name="settings_nas_transfer_remote_directory">Dossier distant</string>
+    <string name="settings_nas_transfer_delete_after_success">Supprimer le fichier local après transfert validé</string>
+    <string name="settings_nas_transfer_delete_after_success_hint">Ne s’applique jamais à un fichier déjà présent ni à un conflit.</string>
+    <string name="settings_nas_transfer_test_connection">Tester la connexion</string>
+    <string name="settings_nas_transfer_test_running">Test SSH, SFTP et écriture dans le dossier distant…</string>
+    <string name="settings_nas_transfer_test_success">Connexion, dossier SFTP et test d’écriture sécurisée réussis.</string>
+    <string name="settings_nas_transfer_host_key_confirmation">Vérifiez cette clé de serveur avant de lui faire confiance :\n%1$s\n%2$s</string>
+    <string name="settings_nas_transfer_trust_host_key">Faire confiance à cette clé et tester à nouveau</string>
+    <string name="settings_nas_transfer_error_invalid_configuration">Renseignez d’abord la configuration NAS et le mot de passe.</string>
+    <string name="settings_nas_transfer_error_host_unreachable">Le nom d’hôte ne peut pas être résolu ou joint.</string>
+    <string name="settings_nas_transfer_error_connection_refused">La connexion SSH a été refusée.</string>
+    <string name="settings_nas_transfer_error_host_key_unknown">Cette clé de serveur doit d’abord être confirmée.</string>
+    <string name="settings_nas_transfer_error_host_key_changed">La clé du serveur a changé. Connexion refusée.</string>
+    <string name="settings_nas_transfer_error_authentication">L’authentification SSH a échoué.</string>
+    <string name="settings_nas_transfer_error_remote_directory">Le dossier distant configuré est introuvable.</string>
+    <string name="settings_nas_transfer_error_remote_directory_writable">Le dossier distant configuré n’est pas accessible en écriture.</string>
+    <string name="settings_nas_transfer_error_cleanup">Le fichier temporaire de test ne peut pas être supprimé. Vérifiez le dossier distant.</string>
+    <string name="settings_nas_transfer_error_timeout">La connexion SSH a expiré.</string>
+    <string name="settings_nas_transfer_error_unknown">Le test de connexion SFTP a échoué.</string>
     <string name="app_name">StreamVault</string>
 
     

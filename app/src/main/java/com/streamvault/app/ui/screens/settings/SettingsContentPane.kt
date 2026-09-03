@@ -168,6 +168,11 @@ internal fun SettingsContentPane(
                 onShowRecordingBrowserDialogChange = { dialogState.showRecordingBrowserDialog = it }
             )
         } else if (dialogState.selectedCategory == 5) {
+            settingsNasTransferSection(
+                uiState = uiState,
+                viewModel = viewModel
+            )
+        } else if (dialogState.selectedCategory == 6) {
             settingsBackupSection(
                 uiState = uiState,
                 viewModel = viewModel,
@@ -186,12 +191,12 @@ internal fun SettingsContentPane(
                 onPull = onDrivePull,
                 onManageBackups = viewModel::manageDriveBackups,
             )
-        } else if (dialogState.selectedCategory == 6) {
+        } else if (dialogState.selectedCategory == 7) {
             epgSourcesSection(
                 uiState = uiState,
                 viewModel = viewModel
             )
-        } else if (dialogState.selectedCategory == 7) {
+        } else if (dialogState.selectedCategory == 8) {
             settingsAboutSection(
                 uiState = uiState,
                 context = context,

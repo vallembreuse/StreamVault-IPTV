@@ -82,6 +82,13 @@ import com.streamvault.domain.repository.ChannelRepository
 import com.streamvault.domain.repository.MovieRepository
 import com.streamvault.domain.repository.SeriesRepository
 import com.streamvault.domain.repository.SyncMetadataRepository
+import com.streamvault.domain.repository.NasCredentialStore
+import com.streamvault.domain.repository.NasSftpClient
+import com.streamvault.domain.repository.NasSftpConnection
+import com.streamvault.domain.repository.NasSftpResult
+import com.streamvault.domain.repository.NasTransferSettingsRepository
+import com.streamvault.domain.model.NasHostKeyTrust
+import com.streamvault.domain.model.NasTransferSettings
 import com.streamvault.domain.usecase.GetCustomCategories
 import com.streamvault.domain.usecase.SyncProvider
 import com.streamvault.domain.usecase.SyncProviderCommand
@@ -127,7 +134,10 @@ class SettingsViewModel @Inject constructor(
     private val gitHubReleaseChecker: GitHubReleaseChecker,
     private val appUpdateInstaller: AppUpdateInstaller,
     private val getCustomCategories: GetCustomCategories,
-    private val audioCompatibilityMemoryStore: AudioCompatibilityMemoryStore
+    private val audioCompatibilityMemoryStore: AudioCompatibilityMemoryStore,
+    private val nasTransferSettingsRepository: NasTransferSettingsRepository,
+    private val nasCredentialStore: NasCredentialStore,
+    private val nasSftpClient: NasSftpClient
 ) : ViewModel() {
     private val appContext = application
     private val exportBackup = ExportBackup(backupManager)
@@ -244,12 +254,139 @@ class SettingsViewModel @Inject constructor(
             preferencesRepository = preferencesRepository,
             uiState = _uiState
         )
+        registerNasTransferObservers()
         driveBackupActions.observeAuthState(viewModelScope)
         viewModelScope.launch {
             backupRestoreStatusStore.observeRestoreJobs().collect { jobs ->
                 _uiState.update { it.copy(backupRestoreJobs = jobs) }
             }
         }
+    }
+
+    private fun registerNasTransferObservers() {
+        viewModelScope.launch {
+            nasTransferSettingsRepository.observeSettings().collect { settings ->
+                _uiState.update { state ->
+                    state.copy(nasTransferSettings = settings)
+                }
+            }
+        }
+        viewModelScope.launch {
+            nasCredentialStore.observePasswordConfigured().collect { configured ->
+                _uiState.update { state -> state.copy(nasPasswordConfigured = configured) }
+            }
+        }
+    }
+
+    fun saveNasTransferSettings(settings: NasTransferSettings, password: String) {
+        val requiresPassword = password.isBlank() && !_uiState.value.nasPasswordConfigured
+        val errors = settings.validationErrors(requirePassword = requiresPassword)
+        if (errors.isNotEmpty()) {
+            _uiState.update { it.copy(userMessage = nasConfigurationErrorMessage(errors.keys.first())) }
+            return
+        }
+        viewModelScope.launch {
+            if (password.isNotBlank()) {
+                val passwordChars = password.toCharArray()
+                try {
+                    nasCredentialStore.savePassword(passwordChars)
+                } finally {
+                    passwordChars.fill('\u0000')
+                }
+            }
+            nasTransferSettingsRepository.updateSettings(settings)
+            _uiState.update { it.copy(nasConnectionTest = NasConnectionTestUiState.Idle) }
+        }
+    }
+
+    fun setNasTransferEnabled(enabled: Boolean) {
+        val settings = _uiState.value.nasTransferSettings
+        if (enabled && settings.validationErrors(requirePassword = !_uiState.value.nasPasswordConfigured).isNotEmpty()) {
+            _uiState.update { it.copy(userMessage = "Configurez d’abord les paramètres NAS requis.") }
+            return
+        }
+        viewModelScope.launch { nasTransferSettingsRepository.updateSettings(settings.copy(enabled = enabled)) }
+    }
+
+    fun setNasLocalFilePolicyDeleteAfterValidatedTransfer(enabled: Boolean) {
+        viewModelScope.launch {
+            nasTransferSettingsRepository.updateSettings(
+                _uiState.value.nasTransferSettings.copy(
+                    localFilePolicy = if (enabled) {
+                        com.streamvault.domain.model.NasLocalFilePolicy.DELETE_AFTER_VALIDATED_TRANSFER
+                    } else {
+                        com.streamvault.domain.model.NasLocalFilePolicy.KEEP_LOCAL
+                    }
+                )
+            )
+        }
+    }
+
+    fun testNasConnection() = testNasConnectionWithTrust(null)
+
+    fun confirmNasHostKeyAndTest() {
+        val pending = _uiState.value.nasConnectionTest as? NasConnectionTestUiState.HostKeyConfirmationRequired
+            ?: return
+        val settings = _uiState.value.nasTransferSettings
+        testNasConnectionWithTrust(
+            NasHostKeyTrust(settings.host, settings.port, pending.algorithm, pending.fingerprint)
+        )
+    }
+
+    private fun testNasConnectionWithTrust(approvedTrust: NasHostKeyTrust?) {
+        val settings = _uiState.value.nasTransferSettings
+        val requiresPassword = !_uiState.value.nasPasswordConfigured
+        if (settings.validationErrors(requirePassword = requiresPassword).isNotEmpty()) {
+            _uiState.update { it.copy(nasConnectionTest = NasConnectionTestUiState.Failure(com.streamvault.domain.repository.NasSftpError.INVALID_CONFIGURATION)) }
+            return
+        }
+        viewModelScope.launch {
+            if (approvedTrust != null) nasTransferSettingsRepository.trustHostKey(approvedTrust)
+            val password = nasCredentialStore.readPassword()
+            if (password == null) {
+                _uiState.update { it.copy(nasConnectionTest = NasConnectionTestUiState.Failure(com.streamvault.domain.repository.NasSftpError.INVALID_CONFIGURATION)) }
+                return@launch
+            }
+            _uiState.update { it.copy(nasConnectionTest = NasConnectionTestUiState.Running) }
+            try {
+                when (
+                    val result = nasSftpClient.testConnection(
+                        NasSftpConnection(
+                            settings = settings.copy(trustedHostKey = approvedTrust ?: settings.trustedHostKey),
+                            password = password,
+                            trustedHostKey = approvedTrust ?: settings.trustedHostKey
+                        )
+                    )
+                ) {
+                    is NasSftpResult.Success -> _uiState.update {
+                        it.copy(nasConnectionTest = NasConnectionTestUiState.Success)
+                    }
+                    is NasSftpResult.Failure -> _uiState.update {
+                        it.copy(nasConnectionTest = NasConnectionTestUiState.Failure(result.error))
+                    }
+                    is NasSftpResult.HostKeyConfirmationRequired -> _uiState.update {
+                        it.copy(
+                            nasConnectionTest = NasConnectionTestUiState.HostKeyConfirmationRequired(
+                                algorithm = result.trust.algorithm,
+                                fingerprint = result.trust.fingerprint
+                            )
+                        )
+                    }
+                }
+            } finally {
+                password.fill('\u0000')
+            }
+        }
+    }
+
+    private fun nasConfigurationErrorMessage(
+        field: com.streamvault.domain.model.NasTransferConfigurationField
+    ): String = when (field) {
+        com.streamvault.domain.model.NasTransferConfigurationField.HOST -> "L’hôte NAS est requis."
+        com.streamvault.domain.model.NasTransferConfigurationField.PORT -> "Le port SSH doit être compris entre 1 et 65535."
+        com.streamvault.domain.model.NasTransferConfigurationField.USERNAME -> "Le nom d’utilisateur SSH est requis."
+        com.streamvault.domain.model.NasTransferConfigurationField.REMOTE_DIRECTORY -> "Le dossier distant est requis."
+        com.streamvault.domain.model.NasTransferConfigurationField.PASSWORD -> "Le mot de passe SSH est requis."
     }
 
     fun refreshCrashReport() {

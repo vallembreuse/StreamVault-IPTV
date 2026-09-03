@@ -40,6 +40,8 @@ import com.streamvault.domain.model.RecordingStorageState
 import com.streamvault.domain.model.RemoteShortcutPreferences
 import com.streamvault.domain.model.TimeshiftBackendPreference
 import com.streamvault.domain.model.VodVariantPreferenceMode
+import com.streamvault.domain.model.NasTransferSettings
+import com.streamvault.domain.repository.NasSftpError
 
 data class CrashReportUiModel(
     val timestamp: String = "",
@@ -49,6 +51,17 @@ data class CrashReportUiModel(
 ) {
     val hasReport: Boolean
         get() = content.isNotBlank()
+}
+
+sealed interface NasConnectionTestUiState {
+    data object Idle : NasConnectionTestUiState
+    data object Running : NasConnectionTestUiState
+    data object Success : NasConnectionTestUiState
+    data class HostKeyConfirmationRequired(
+        val algorithm: String,
+        val fingerprint: String
+    ) : NasConnectionTestUiState
+    data class Failure(val error: NasSftpError) : NasConnectionTestUiState
 }
 
 data class SettingsUiState(
@@ -180,5 +193,8 @@ data class SettingsUiState(
     val isCheckingForUpdates: Boolean = false,
     val appUpdate: AppUpdateUiModel = AppUpdateUiModel(),
     val crashReport: CrashReportUiModel = CrashReportUiModel(),
-    val viewedCrashReport: CrashReportUiModel? = null
+    val viewedCrashReport: CrashReportUiModel? = null,
+    val nasTransferSettings: NasTransferSettings = NasTransferSettings(),
+    val nasPasswordConfigured: Boolean = false,
+    val nasConnectionTest: NasConnectionTestUiState = NasConnectionTestUiState.Idle
 )
