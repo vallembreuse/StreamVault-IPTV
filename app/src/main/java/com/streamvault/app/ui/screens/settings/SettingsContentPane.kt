@@ -114,28 +114,28 @@ internal fun SettingsContentPane(
                 onShowEthernetQualityDialogChange = { dialogState.showEthernetQualityDialog = it }
             )
         } else if (dialogState.selectedCategory == 2) {
-    settingsBrowsingSection(
-        uiState = uiState,
-        viewModel = viewModel,
-        context = context,
-        appLandingDestinationLabel = screenLabels.appLandingDestinationLabel,
-        topNavigationSummaryLabel = screenLabels.topNavigationSummaryLabel,
-        homeDashboardSummaryLabel = screenLabels.homeDashboardSummaryLabel,
-        guideDefaultCategoryLabel = screenLabels.guideDefaultCategoryLabel,
-        timeFormatLabel = screenLabels.timeFormatLabel,
-        appLanguageLabel = screenLabels.appLanguageLabel,
+            settingsBrowsingSection(
+                uiState = uiState,
+                viewModel = viewModel,
+                context = context,
+                appLandingDestinationLabel = screenLabels.appLandingDestinationLabel,
+                topNavigationSummaryLabel = screenLabels.topNavigationSummaryLabel,
+                homeDashboardSummaryLabel = screenLabels.homeDashboardSummaryLabel,
+                guideDefaultCategoryLabel = screenLabels.guideDefaultCategoryLabel,
+                timeFormatLabel = screenLabels.timeFormatLabel,
+                appLanguageLabel = screenLabels.appLanguageLabel,
                 onShowLiveTvModeDialogChange = { dialogState.showLiveTvModeDialog = it },
                 onShowLiveTvFiltersDialogChange = { dialogState.showLiveTvFiltersDialog = it },
                 onShowLiveTvQuickFilterVisibilityDialogChange = { dialogState.showLiveTvQuickFilterVisibilityDialog = it },
                 onShowLiveChannelNumberingDialogChange = { dialogState.showLiveChannelNumberingDialog = it },
-        onShowLiveChannelGroupingDialogChange = { dialogState.showLiveChannelGroupingDialog = it },
-        onShowGroupedChannelLabelDialogChange = { dialogState.showGroupedChannelLabelDialog = it },
-        onShowLiveVariantPreferenceDialogChange = { dialogState.showLiveVariantPreferenceDialog = it },
-        onShowTopNavigationDialogChange = { dialogState.showTopNavigationDialog = it },
-        onShowHomeDashboardDialogChange = { dialogState.showHomeDashboardDialog = it },
-        onShowLandingScreenDialogChange = { dialogState.showLandingScreenDialog = it },
-        onShowGuideDefaultCategoryDialogChange = { dialogState.showGuideDefaultCategoryDialog = it },
-        onShowTimeFormatDialogChange = { dialogState.showTimeFormatDialog = it },
+                onShowLiveChannelGroupingDialogChange = { dialogState.showLiveChannelGroupingDialog = it },
+                onShowGroupedChannelLabelDialogChange = { dialogState.showGroupedChannelLabelDialog = it },
+                onShowLiveVariantPreferenceDialogChange = { dialogState.showLiveVariantPreferenceDialog = it },
+                onShowTopNavigationDialogChange = { dialogState.showTopNavigationDialog = it },
+                onShowHomeDashboardDialogChange = { dialogState.showHomeDashboardDialog = it },
+                onShowLandingScreenDialogChange = { dialogState.showLandingScreenDialog = it },
+                onShowGuideDefaultCategoryDialogChange = { dialogState.showGuideDefaultCategoryDialog = it },
+                onShowTimeFormatDialogChange = { dialogState.showTimeFormatDialog = it },
                 onShowVodViewModeDialogChange = { dialogState.showVodViewModeDialog = it },
                 onShowVodDuplicateHandlingDialogChange = { dialogState.showVodDuplicateHandlingDialog = it },
                 onShowVodVariantPreferenceDialogChange = { dialogState.showVodVariantPreferenceDialog = it },
@@ -192,6 +192,8 @@ internal fun SettingsContentPane(
                 viewModel = viewModel
             )
         } else if (dialogState.selectedCategory == 7) {
+            settingsNasTransferSection()
+        } else if (dialogState.selectedCategory == 8) {
             settingsAboutSection(
                 uiState = uiState,
                 context = context,

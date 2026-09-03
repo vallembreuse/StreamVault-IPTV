@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_nas_transfer">NAS Transfer</string>
+    <string name="settings_nas_transfer_title">NAS transfer</string>
+    <string name="settings_nas_transfer_subtitle">Configure secure SFTP transfer of completed downloads to your NAS.</string>
+    <string name="settings_nas_transfer_enabled">Enable NAS transfer</string>
+    <string name="settings_nas_transfer_disabled">Disabled</string>
+    <string name="settings_nas_transfer_host">NAS address</string>
+    <string name="settings_nas_transfer_port">SSH port</string>
+    <string name="settings_nas_transfer_username">Username</string>
+    <string name="settings_nas_transfer_password">Password</string>
+    <string name="settings_nas_transfer_destination">Destination folder</string>
+    <string name="settings_nas_transfer_wifi_only">Wi-Fi only</string>
+    <string name="settings_nas_transfer_wifi_only_desc">Do not transfer over mobile data.</string>
+    <string name="settings_nas_transfer_delete_after">Delete local file after transfer</string>
+    <string name="settings_nas_transfer_delete_after_desc">Only after the NAS copy has been completed and validated.</string>
+    <string name="settings_nas_transfer_secure_storage_unavailable">Secure credential storage is unavailable. The password cannot be saved on this device.</string>
+</resources>
