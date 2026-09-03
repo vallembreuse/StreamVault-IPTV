@@ -73,6 +73,7 @@ dependencies {
     implementation(libs.okhttp.logging)
     implementation(libs.gson)
     implementation(libs.kotlinx.serialization.json)
+    implementation("com.github.mwiede:jsch:2.28.7")
 
     // Google Sign-In (Drive sync)
     implementation(libs.play.services.auth)
