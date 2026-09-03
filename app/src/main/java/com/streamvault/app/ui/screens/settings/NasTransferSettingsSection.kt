@@ -1,12 +1,12 @@
 package com.streamvault.app.ui.screens.settings
 
-import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,113 +20,88 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 import com.streamvault.app.R
+import com.streamvault.app.ui.interaction.TvButton
+import com.streamvault.data.nas.NasConnectionFailure
+import com.streamvault.data.nas.NasConnectionTestResult
+import com.streamvault.data.nas.NasSftpConnectionTester
+import com.streamvault.data.nas.NasTransferSettings
+import com.streamvault.data.nas.NasTransferSettingsStore
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 internal data class NasTransferSettingsUiState(
-    val enabled: Boolean = false,
-    val host: String = "",
-    val port: String = "22",
-    val username: String = "",
-    val password: String = "",
-    val destinationPath: String = "/volume1/Media/Films/",
-    val wifiOnly: Boolean = true,
-    val deleteAfterTransfer: Boolean = false,
-    val secureStorageAvailable: Boolean = true
+    val settings: NasTransferSettings = NasTransferSettings(),
+    val isTesting: Boolean = false,
+    val testResult: NasConnectionTestResult? = null
+)
+
+private data class ConnectionTestState(
+    val isTesting: Boolean = false,
+    val result: NasConnectionTestResult? = null
 )
 
 @HiltViewModel
 internal class NasTransferSettingsViewModel @Inject constructor(
-    @ApplicationContext private val context: Context
+    private val settingsStore: NasTransferSettingsStore,
+    private val connectionTester: NasSftpConnectionTester
 ) : ViewModel() {
-    private companion object {
-        const val PREFS_NAME = "nas_transfer_settings"
-        const val SECURE_PREFS_NAME = "nas_transfer_secure"
-        const val KEY_ENABLED = "enabled"
-        const val KEY_HOST = "host"
-        const val KEY_PORT = "port"
-        const val KEY_USERNAME = "username"
-        const val KEY_DESTINATION = "destination"
-        const val KEY_WIFI_ONLY = "wifi_only"
-        const val KEY_DELETE_AFTER_TRANSFER = "delete_after_transfer"
-        const val KEY_PASSWORD = "password"
-    }
+    private val connectionTestState = MutableStateFlow(ConnectionTestState())
 
-    private val preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-    private val securePreferences = runCatching {
-        val masterKey = MasterKey.Builder(context)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
-        EncryptedSharedPreferences.create(
-            context,
-            SECURE_PREFS_NAME,
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
-    }.getOrNull()
-
-    private val _uiState = MutableStateFlow(
+    val uiState: StateFlow<NasTransferSettingsUiState> = combine(
+        settingsStore.settings,
+        connectionTestState
+    ) { settings, testState ->
         NasTransferSettingsUiState(
-            enabled = preferences.getBoolean(KEY_ENABLED, false),
-            host = preferences.getString(KEY_HOST, "").orEmpty(),
-            port = preferences.getString(KEY_PORT, "22").orEmpty().ifBlank { "22" },
-            username = preferences.getString(KEY_USERNAME, "").orEmpty(),
-            password = securePreferences?.getString(KEY_PASSWORD, "").orEmpty(),
-            destinationPath = preferences.getString(KEY_DESTINATION, "/volume1/Media/Films/")
-                .orEmpty()
-                .ifBlank { "/volume1/Media/Films/" },
-            wifiOnly = preferences.getBoolean(KEY_WIFI_ONLY, true),
-            deleteAfterTransfer = preferences.getBoolean(KEY_DELETE_AFTER_TRANSFER, false),
-            secureStorageAvailable = securePreferences != null
+            settings = settings,
+            isTesting = testState.isTesting,
+            testResult = testState.result
         )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = NasTransferSettingsUiState(settings = settingsStore.current())
     )
-    val uiState: StateFlow<NasTransferSettingsUiState> = _uiState.asStateFlow()
 
-    fun setEnabled(value: Boolean) = updatePreference(KEY_ENABLED, value) { copy(enabled = value) }
-    fun setHost(value: String) = updatePreference(KEY_HOST, value.trim()) { copy(host = value) }
-    fun setPort(value: String) {
-        if (value.isNotEmpty() && value.any { !it.isDigit() }) return
-        updatePreference(KEY_PORT, value) { copy(port = value) }
-    }
-    fun setUsername(value: String) = updatePreference(KEY_USERNAME, value.trim()) { copy(username = value) }
-    fun setDestinationPath(value: String) = updatePreference(KEY_DESTINATION, value.trim()) { copy(destinationPath = value) }
-    fun setWifiOnly(value: Boolean) = updatePreference(KEY_WIFI_ONLY, value) { copy(wifiOnly = value) }
-    fun setDeleteAfterTransfer(value: Boolean) = updatePreference(KEY_DELETE_AFTER_TRANSFER, value) {
-        copy(deleteAfterTransfer = value)
+    fun setEnabled(value: Boolean) = updateSettings { settingsStore.setEnabled(value) }
+    fun setHost(value: String) = updateSettings { settingsStore.setHost(value) }
+    fun setPort(value: String) = updateSettings { settingsStore.setPort(value) }
+    fun setUsername(value: String) = updateSettings { settingsStore.setUsername(value) }
+    fun setPassword(value: String) = updateSettings { settingsStore.setPassword(value) }
+    fun setDestinationPath(value: String) = updateSettings { settingsStore.setDestinationPath(value) }
+    fun setWifiOnly(value: Boolean) = updateSettings { settingsStore.setWifiOnly(value) }
+    fun setDeleteAfterTransfer(value: Boolean) = updateSettings {
+        settingsStore.setDeleteAfterTransfer(value)
     }
 
-    fun setPassword(value: String) {
-        _uiState.update { it.copy(password = value) }
-        val securePrefs = securePreferences ?: return
+    fun testConnection() {
+        if (connectionTestState.value.isTesting) return
+        connectionTestState.value = ConnectionTestState(isTesting = true)
         viewModelScope.launch {
-            securePrefs.edit().putString(KEY_PASSWORD, value).apply()
+            val result = connectionTester.testCurrent()
+            connectionTestState.value = ConnectionTestState(result = result)
         }
     }
 
-    private fun updatePreference(
-        key: String,
-        value: Any,
-        transform: NasTransferSettingsUiState.() -> NasTransferSettingsUiState
-    ) {
-        _uiState.update { it.transform() }
-        viewModelScope.launch {
-            preferences.edit().apply {
-                when (value) {
-                    is Boolean -> putBoolean(key, value)
-                    is String -> putString(key, value)
-                }
-            }.apply()
-        }
+    fun clearTrustedHost() {
+        settingsStore.clearTrustedHost()
+        clearTestFeedback()
+    }
+
+    private fun updateSettings(update: () -> Unit) {
+        clearTestFeedback()
+        update()
+    }
+
+    private fun clearTestFeedback() {
+        connectionTestState.update { ConnectionTestState() }
     }
 }
 
@@ -140,7 +115,17 @@ internal fun LazyListScope.settingsNasTransferSection() {
 private fun NasTransferSettingsPanel(
     viewModel: NasTransferSettingsViewModel = hiltViewModel()
 ) {
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val state = uiState.settings
+    val portIsValid = state.port.toIntOrNull()?.let { it in 1..65535 } == true
+    val canTest = state.enabled &&
+        state.secureStorageAvailable &&
+        state.host.isNotBlank() &&
+        portIsValid &&
+        state.username.isNotBlank() &&
+        state.password.isNotBlank() &&
+        state.destinationPath.isNotBlank() &&
+        !uiState.isTesting
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -208,12 +193,97 @@ private fun NasTransferSettingsPanel(
             enabled = state.enabled
         )
 
+        Text(
+            text = stringResource(R.string.settings_nas_transfer_host_trust_desc),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 8.dp)
+        )
+
+        TvButton(
+            onClick = viewModel::testConnection,
+            enabled = canTest
+        ) {
+            Text(
+                text = stringResource(
+                    if (uiState.isTesting) {
+                        R.string.settings_nas_transfer_testing
+                    } else {
+                        R.string.settings_nas_transfer_test_connection
+                    }
+                )
+            )
+        }
+
+        uiState.testResult?.let { result ->
+            NasConnectionTestFeedback(result = result)
+        }
+
+        if (state.hasTrustedHostKey) {
+            TvButton(onClick = viewModel::clearTrustedHost) {
+                Text(text = stringResource(R.string.settings_nas_transfer_forget_host_key))
+            }
+        }
+
         if (!state.secureStorageAvailable) {
             Text(
                 text = stringResource(R.string.settings_nas_transfer_secure_storage_unavailable),
                 modifier = Modifier.padding(horizontal = 8.dp),
-                color = androidx.compose.material3.MaterialTheme.colorScheme.error,
-                style = androidx.compose.material3.MaterialTheme.typography.bodySmall
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+    }
+}
+
+@Composable
+private fun NasConnectionTestFeedback(result: NasConnectionTestResult) {
+    val message = if (result.success) {
+        stringResource(
+            if (result.trustedNewHost) {
+                R.string.settings_nas_transfer_test_success_trusted
+            } else {
+                R.string.settings_nas_transfer_test_success
+            }
+        )
+    } else {
+        stringResource(
+            when (result.failure) {
+                NasConnectionFailure.INVALID_SETTINGS -> R.string.settings_nas_transfer_test_invalid
+                NasConnectionFailure.WIFI_REQUIRED -> R.string.settings_nas_transfer_test_wifi_required
+                NasConnectionFailure.AUTHENTICATION_FAILED -> R.string.settings_nas_transfer_test_auth_failed
+                NasConnectionFailure.HOST_KEY_CHANGED -> R.string.settings_nas_transfer_test_host_key_changed
+                NasConnectionFailure.DESTINATION_UNAVAILABLE -> R.string.settings_nas_transfer_test_destination_unavailable
+                NasConnectionFailure.DESTINATION_NOT_DIRECTORY -> R.string.settings_nas_transfer_test_destination_not_directory
+                NasConnectionFailure.DESTINATION_NOT_WRITABLE -> R.string.settings_nas_transfer_test_destination_not_writable
+                NasConnectionFailure.NETWORK_ERROR -> R.string.settings_nas_transfer_test_network_error
+                NasConnectionFailure.UNKNOWN,
+                null -> R.string.settings_nas_transfer_test_unknown
+            }
+        )
+    }
+
+    Column(
+        modifier = Modifier.padding(horizontal = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (result.success) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.error
+            }
+        )
+        result.fingerprint?.let { fingerprint ->
+            Text(
+                text = stringResource(
+                    R.string.settings_nas_transfer_host_fingerprint,
+                    fingerprint
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -235,7 +305,11 @@ private fun NasSettingsTextField(
         enabled = enabled,
         singleLine = true,
         keyboardOptions = keyboardOptions,
-        visualTransformation = if (password) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
+        visualTransformation = if (password) {
+            PasswordVisualTransformation()
+        } else {
+            androidx.compose.ui.text.input.VisualTransformation.None
+        },
         modifier = Modifier.fillMaxWidth()
     )
 }
