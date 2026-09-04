@@ -33,7 +33,7 @@ import javax.inject.Singleton
 class SshjNasSftpClient @Inject constructor() : NasSftpClient {
     override suspend fun testConnection(connection: NasSftpConnection): NasSftpResult<NasConnectionTestResult> =
         withContext(Dispatchers.IO) {
-            if (connection.password.isEmpty() || connection.settings.validationErrors(requirePassword = true).isNotEmpty()) {
+            if (connection.password.isEmpty() || connection.settings.validationErrors(requirePassword = false).isNotEmpty()) {
                 return@withContext NasSftpResult.Failure(NasSftpError.INVALID_CONFIGURATION)
             }
             withSftp(connection) { sftp ->
