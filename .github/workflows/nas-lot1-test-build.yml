@@ -28,7 +28,19 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build TEST APK
-        run: ./gradlew --console=plain :app:assembleDebug
+        shell: bash
+        run: |
+          set +e
+          ./gradlew --console=plain :app:assembleDebug > gradle-build.log 2>&1
+          code=$?
+          if [ "$code" -ne 0 ]; then
+            echo "=== COMPACT GRADLE FAILURE ==="
+            grep -E -C 2 '(^e: |error:|FAILURE:|What went wrong|FAILED|Compilation error|Unresolved reference|Type mismatch|Cannot access|Exception)' gradle-build.log | tail -n 180 || true
+            echo "=== LAST 80 LINES ==="
+            tail -n 80 gradle-build.log
+            exit "$code"
+          fi
+          tail -n 40 gradle-build.log
 
       - name: Prepare artifact
         shell: bash
