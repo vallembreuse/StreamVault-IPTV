@@ -26,6 +26,12 @@
     <string name="settings_nas_transfer_host_key_confirmation">Vérifiez cette clé de serveur avant de lui faire confiance :\n%1$s\n%2$s</string>
     <string name="settings_nas_transfer_trust_host_key">Faire confiance à cette clé et tester à nouveau</string>
     <string name="settings_nas_transfer_error_invalid_configuration">Renseignez d’abord la configuration NAS et le mot de passe.</string>
+    <string name="settings_nas_transfer_error_required_configuration">Configurez d’abord les paramètres NAS requis.</string>
+    <string name="settings_nas_transfer_error_host_required">L’hôte NAS est requis.</string>
+    <string name="settings_nas_transfer_error_port_invalid">Le port SSH doit être compris entre 1 et 65535.</string>
+    <string name="settings_nas_transfer_error_username_required">Le nom d’utilisateur SSH est requis.</string>
+    <string name="settings_nas_transfer_error_remote_directory_required">Le dossier distant est requis.</string>
+    <string name="settings_nas_transfer_error_password_required">Le mot de passe SSH est requis.</string>
     <string name="settings_nas_transfer_error_host_unreachable">Le nom d’hôte ne peut pas être résolu ou joint.</string>
     <string name="settings_nas_transfer_error_connection_refused">La connexion SSH a été refusée.</string>
     <string name="settings_nas_transfer_error_host_key_unknown">Cette clé de serveur doit d’abord être confirmée.</string>

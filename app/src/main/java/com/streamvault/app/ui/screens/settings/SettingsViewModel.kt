@@ -302,7 +302,9 @@ class SettingsViewModel @Inject constructor(
     fun setNasTransferEnabled(enabled: Boolean) {
         val settings = _uiState.value.nasTransferSettings
         if (enabled && settings.validationErrors(requirePassword = !_uiState.value.nasPasswordConfigured).isNotEmpty()) {
-            _uiState.update { it.copy(userMessage = "Configurez d’abord les paramètres NAS requis.") }
+            _uiState.update {
+                it.copy(userMessage = appContext.getString(R.string.settings_nas_transfer_error_required_configuration))
+            }
             return
         }
         viewModelScope.launch { nasTransferSettingsRepository.updateSettings(settings.copy(enabled = enabled)) }
@@ -381,13 +383,15 @@ class SettingsViewModel @Inject constructor(
 
     private fun nasConfigurationErrorMessage(
         field: com.streamvault.domain.model.NasTransferConfigurationField
-    ): String = when (field) {
-        com.streamvault.domain.model.NasTransferConfigurationField.HOST -> "L’hôte NAS est requis."
-        com.streamvault.domain.model.NasTransferConfigurationField.PORT -> "Le port SSH doit être compris entre 1 et 65535."
-        com.streamvault.domain.model.NasTransferConfigurationField.USERNAME -> "Le nom d’utilisateur SSH est requis."
-        com.streamvault.domain.model.NasTransferConfigurationField.REMOTE_DIRECTORY -> "Le dossier distant est requis."
-        com.streamvault.domain.model.NasTransferConfigurationField.PASSWORD -> "Le mot de passe SSH est requis."
-    }
+    ): String = appContext.getString(
+        when (field) {
+            com.streamvault.domain.model.NasTransferConfigurationField.HOST -> R.string.settings_nas_transfer_error_host_required
+            com.streamvault.domain.model.NasTransferConfigurationField.PORT -> R.string.settings_nas_transfer_error_port_invalid
+            com.streamvault.domain.model.NasTransferConfigurationField.USERNAME -> R.string.settings_nas_transfer_error_username_required
+            com.streamvault.domain.model.NasTransferConfigurationField.REMOTE_DIRECTORY -> R.string.settings_nas_transfer_error_remote_directory_required
+            com.streamvault.domain.model.NasTransferConfigurationField.PASSWORD -> R.string.settings_nas_transfer_error_password_required
+        }
+    )
 
     fun refreshCrashReport() {
         val report = CrashReportStore.latestReport(appContext)
