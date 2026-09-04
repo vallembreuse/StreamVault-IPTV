@@ -28,6 +28,12 @@ object MovieWatchStateBus {
         }
     }
 
+    fun publish(providerId: Long, movieId: Long, watched: Boolean) {
+        _overrides.update { current ->
+            current + (Key(providerId, movieId) to watched)
+        }
+    }
+
     fun watchedOverride(movie: Movie, values: Map<Key, Boolean>): Boolean? {
         val ids = buildList {
             add(movie.id)

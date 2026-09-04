@@ -184,6 +184,7 @@ class MovieDetailViewModel @Inject constructor(
             }
 
             if (result is Result.Success) {
+                MovieWatchStateBus.publish(movie, !currentlyWatched)
                 val updatedProgress = if (currentlyWatched) 0L else totalDurationMs
                 _uiState.update { state ->
                     state.copy(

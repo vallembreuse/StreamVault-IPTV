@@ -1,6 +1,7 @@
 package com.streamvault.app.ui.screens.player
 
 import com.streamvault.app.tv.LauncherRecommendationsManager
+import com.streamvault.app.ui.screens.movies.MovieWatchStateBus
 import com.streamvault.app.tv.WatchNextManager
 import com.streamvault.domain.model.ContentType
 import com.streamvault.domain.model.PlaybackHistory
@@ -39,8 +40,17 @@ class PlayerHistoryCoordinator @Inject constructor(
     internal suspend fun recordPlayback(history: PlaybackHistory): Result<Unit> =
         repository.recordPlayback(history)
 
-    internal suspend fun markAsWatched(history: PlaybackHistory): Result<Unit> =
-        markAsWatched(history)
+    internal suspend fun markAsWatched(history: PlaybackHistory): Result<Unit> {
+        val result = markAsWatched(history)
+        if (result.isSuccess && history.contentType == ContentType.MOVIE) {
+            MovieWatchStateBus.publish(
+                providerId = history.providerId,
+                movieId = history.contentId,
+                watched = true
+            )
+        }
+        return result
+    }
 
     internal suspend fun updateResumePosition(history: PlaybackHistory): Result<Unit> =
         repository.updateResumePosition(history)

@@ -60,6 +60,7 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import com.streamvault.app.R
+import com.streamvault.app.ui.screens.movies.MovieWatchStateBus
 import com.streamvault.app.ui.components.ChannelLogoBadge
 import com.streamvault.app.ui.components.rememberCrossfadeImageModel
 import com.streamvault.app.ui.design.AppColors
@@ -360,8 +361,10 @@ fun LiveChannelRowSurface(
 
 @Composable
 fun MoviePosterCard(movie: Movie, modifier: Modifier = Modifier) {
+    val watchedOverrides by MovieWatchStateBus.overrides.collectAsStateWithLifecycle()
     val durationMs = movie.durationSeconds.toLong() * 1000L
-    val isWatched = durationMs > 0L && isPlaybackComplete(movie.watchProgress, durationMs)
+    val persistedWatched = durationMs > 0L && isPlaybackComplete(movie.watchProgress, durationMs)
+    val isWatched = MovieWatchStateBus.watchedOverride(movie, watchedOverrides) ?: persistedWatched
     val progress = if (movie.watchProgress > 5000L && durationMs > 0L && !isWatched) {
         (movie.watchProgress.toFloat() / durationMs).coerceIn(0f, 1f)
     } else {
