@@ -30,10 +30,14 @@ import javax.inject.Singleton
 
 /** SSHJ-backed implementation. Every call runs on Dispatchers.IO and has no UI dependency. */
 @Singleton
-class SshjNasSftpClient @Inject constructor() : NasSftpClient {
+class SshjNasSftpClient internal constructor(
+    private val sshClientFactory: () -> SSHClient
+) : NasSftpClient {
+    @Inject
+    constructor() : this({ SSHClient() })
     override suspend fun testConnection(connection: NasSftpConnection): NasSftpResult<NasConnectionTestResult> =
         withContext(Dispatchers.IO) {
-            if (connection.password.isEmpty() || connection.settings.validationErrors(requirePassword = true).isNotEmpty()) {
+            if (connection.password.isEmpty() || connection.settings.validationErrors(requirePassword = false).isNotEmpty()) {
                 return@withContext NasSftpResult.Failure(NasSftpError.INVALID_CONFIGURATION)
             }
             withSftp(connection) { sftp ->
@@ -125,7 +129,7 @@ class SshjNasSftpClient @Inject constructor() : NasSftpClient {
         val keyVerifier = PinnedHostKeyVerifier(connection.trustedHostKey)
         var stage = ConnectionStage.CONNECT
         return try {
-            SSHClient().use { ssh ->
+            sshClientFactory().use { ssh ->
                 ssh.connectTimeout = CONNECT_TIMEOUT_MS
                 ssh.timeout = SOCKET_TIMEOUT_MS
                 ssh.addHostKeyVerifier(keyVerifier)
