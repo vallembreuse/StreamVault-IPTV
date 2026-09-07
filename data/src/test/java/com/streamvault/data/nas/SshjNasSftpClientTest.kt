@@ -97,4 +97,33 @@ class SshjNasSftpClientTest {
         assertThat((result as NasSftpResult.Failure).error)
             .isEqualTo(NasSftpError.TIMEOUT)
     }
+
+
+    @Test
+    fun `unknown host is mapped to DNS_OR_HOST_UNREACHABLE`() = runTest {
+        val ssh: SSHClient = mock()
+
+        doThrow(java.net.UnknownHostException("nas.example"))
+            .`when`(ssh)
+            .connect("nas.example", 22)
+
+        val client = SshjNasSftpClient { ssh }
+
+        val result = client.testConnection(
+            NasSftpConnection(
+                settings = NasTransferSettings(
+                    host = "nas.example",
+                    port = 22,
+                    username = "streamvault",
+                    remoteDirectory = "/films"
+                ),
+                password = "secret".toCharArray(),
+                trustedHostKey = null
+            )
+        )
+
+        assertThat(result).isInstanceOf(NasSftpResult.Failure::class.java)
+        assertThat((result as NasSftpResult.Failure).error)
+            .isEqualTo(NasSftpError.DNS_OR_HOST_UNREACHABLE)
+    }
 }
