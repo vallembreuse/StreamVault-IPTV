@@ -68,4 +68,33 @@ class SshjNasSftpClientTest {
         assertThat((result as NasSftpResult.Failure).error)
             .isEqualTo(NasSftpError.AUTHENTICATION_FAILED)
     }
+
+
+    @Test
+    fun `connection timeout is mapped to TIMEOUT`() = runTest {
+        val ssh: SSHClient = mock()
+
+        doThrow(java.net.SocketTimeoutException("Connection timed out"))
+            .`when`(ssh)
+            .connect("nas.example", 22)
+
+        val client = SshjNasSftpClient { ssh }
+
+        val result = client.testConnection(
+            NasSftpConnection(
+                settings = NasTransferSettings(
+                    host = "nas.example",
+                    port = 22,
+                    username = "streamvault",
+                    remoteDirectory = "/films"
+                ),
+                password = "secret".toCharArray(),
+                trustedHostKey = null
+            )
+        )
+
+        assertThat(result).isInstanceOf(NasSftpResult.Failure::class.java)
+        assertThat((result as NasSftpResult.Failure).error)
+            .isEqualTo(NasSftpError.TIMEOUT)
+    }
 }
