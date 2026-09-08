@@ -573,4 +573,34 @@ class SshjNasSftpClientTest {
         assertThat(result).isInstanceOf(NasSftpResult.Success::class.java)
         assertThat((result as NasSftpResult.Success).value).isNull()
     }
+
+
+    @Test
+    fun `isDirectoryWritable returns false when remote directory does not exist`() = runTest {
+        val ssh: SSHClient = mock()
+        val sftp: net.schmizz.sshj.sftp.SFTPClient = mock()
+
+        org.mockito.kotlin.whenever(ssh.newSFTPClient()).thenReturn(sftp)
+        org.mockito.kotlin.whenever(sftp.statExistence("/films"))
+            .thenReturn(null)
+
+        val client = SshjNasSftpClient { ssh }
+
+        val result = client.isDirectoryWritable(
+            NasSftpConnection(
+                settings = NasTransferSettings(
+                    host = "nas.example",
+                    port = 22,
+                    username = "streamvault",
+                    remoteDirectory = "/films"
+                ),
+                password = "secret".toCharArray(),
+                trustedHostKey = null
+            ),
+            "/films"
+        )
+
+        assertThat(result).isInstanceOf(NasSftpResult.Success::class.java)
+        assertThat((result as NasSftpResult.Success).value).isFalse()
+    }
 }
