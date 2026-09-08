@@ -603,4 +603,37 @@ class SshjNasSftpClientTest {
         assertThat(result).isInstanceOf(NasSftpResult.Success::class.java)
         assertThat((result as NasSftpResult.Success).value).isFalse()
     }
+
+
+    @Test
+    fun `isDirectoryWritable returns false when remote path is not a directory`() = runTest {
+        val ssh: SSHClient = mock()
+        val sftp: net.schmizz.sshj.sftp.SFTPClient = mock()
+        val attributes: net.schmizz.sshj.sftp.FileAttributes = mock()
+
+        org.mockito.kotlin.whenever(ssh.newSFTPClient()).thenReturn(sftp)
+        org.mockito.kotlin.whenever(sftp.statExistence("/films"))
+            .thenReturn(attributes)
+        org.mockito.kotlin.whenever(attributes.type)
+            .thenReturn(net.schmizz.sshj.sftp.FileMode.Type.REGULAR)
+
+        val client = SshjNasSftpClient { ssh }
+
+        val result = client.isDirectoryWritable(
+            NasSftpConnection(
+                settings = NasTransferSettings(
+                    host = "nas.example",
+                    port = 22,
+                    username = "streamvault",
+                    remoteDirectory = "/films"
+                ),
+                password = "secret".toCharArray(),
+                trustedHostKey = null
+            ),
+            "/films"
+        )
+
+        assertThat(result).isInstanceOf(NasSftpResult.Success::class.java)
+        assertThat((result as NasSftpResult.Success).value).isFalse()
+    }
 }
