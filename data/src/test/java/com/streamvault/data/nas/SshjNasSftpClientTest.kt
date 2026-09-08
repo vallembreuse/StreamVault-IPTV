@@ -445,4 +445,38 @@ class SshjNasSftpClientTest {
         assertThat(result).isInstanceOf(NasSftpResult.Success::class.java)
         assertThat((result as NasSftpResult.Success).value).isNull()
     }
+
+
+    @Test
+    fun `exists returns true when remote path exists`() = runTest {
+        val ssh: SSHClient = mock()
+        val sftp: net.schmizz.sshj.sftp.SFTPClient = mock()
+        val attributes: net.schmizz.sshj.sftp.FileAttributes = mock()
+
+        org.mockito.kotlin.whenever(ssh.newSFTPClient()).thenReturn(sftp)
+        org.mockito.kotlin.whenever(sftp.statExistence("/films/movie.mkv"))
+            .thenReturn(attributes)
+        org.mockito.kotlin.whenever(attributes.size).thenReturn(123456L)
+        org.mockito.kotlin.whenever(attributes.type)
+            .thenReturn(net.schmizz.sshj.sftp.FileMode.Type.REGULAR)
+
+        val client = SshjNasSftpClient { ssh }
+
+        val result = client.exists(
+            NasSftpConnection(
+                settings = NasTransferSettings(
+                    host = "nas.example",
+                    port = 22,
+                    username = "streamvault",
+                    remoteDirectory = "/films"
+                ),
+                password = "secret".toCharArray(),
+                trustedHostKey = null
+            ),
+            "/films/movie.mkv"
+        )
+
+        assertThat(result).isInstanceOf(NasSftpResult.Success::class.java)
+        assertThat((result as NasSftpResult.Success).value).isTrue()
+    }
 }
