@@ -27,6 +27,12 @@ android {
         unitTests.isReturnDefaultValues = true
     }
 
+    packaging {
+        resources {
+            excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+        }
+    }
+
     lint {
         baseline = file("lint-baseline.xml")
         warningsAsErrors = true
