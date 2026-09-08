@@ -676,4 +676,45 @@ class SshjNasSftpClientTest {
         assertThat(result).isInstanceOf(NasSftpResult.Success::class.java)
         assertThat((result as NasSftpResult.Success).value).isTrue()
     }
+
+
+    @Test
+    fun `isDirectoryWritable maps write failure to REMOTE_DIRECTORY_NOT_WRITABLE`() = runTest {
+        val ssh: SSHClient = mock()
+        val sftp: net.schmizz.sshj.sftp.SFTPClient = mock()
+        val attributes: net.schmizz.sshj.sftp.FileAttributes = mock()
+
+        org.mockito.kotlin.whenever(ssh.newSFTPClient()).thenReturn(sftp)
+        org.mockito.kotlin.whenever(sftp.statExistence("/films"))
+            .thenReturn(attributes)
+        org.mockito.kotlin.whenever(attributes.type)
+            .thenReturn(net.schmizz.sshj.sftp.FileMode.Type.DIRECTORY)
+
+        org.mockito.kotlin.doThrow(
+            net.schmizz.sshj.sftp.SFTPException("Permission denied")
+        ).`when`(sftp).open(
+            org.mockito.kotlin.any<String>(),
+            org.mockito.kotlin.any()
+        )
+
+        val client = SshjNasSftpClient { ssh }
+
+        val result = client.isDirectoryWritable(
+            NasSftpConnection(
+                settings = NasTransferSettings(
+                    host = "nas.example",
+                    port = 22,
+                    username = "streamvault",
+                    remoteDirectory = "/films"
+                ),
+                password = "secret".toCharArray(),
+                trustedHostKey = null
+            ),
+            "/films"
+        )
+
+        assertThat(result).isInstanceOf(NasSftpResult.Failure::class.java)
+        assertThat((result as NasSftpResult.Failure).error)
+            .isEqualTo(NasSftpError.REMOTE_DIRECTORY_NOT_WRITABLE)
+    }
 }
