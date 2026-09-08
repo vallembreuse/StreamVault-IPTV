@@ -291,4 +291,48 @@ class SshjNasSftpClientTest {
         assertThat((result as NasSftpResult.Failure).error)
             .isEqualTo(NasSftpError.REMOTE_DIRECTORY_NOT_WRITABLE)
     }
+
+
+    @Test
+    fun `temporary write test cleanup failure is mapped to REMOTE_TEST_CLEANUP_FAILED`() = runTest {
+        val ssh: SSHClient = mock()
+        val sftp: net.schmizz.sshj.sftp.SFTPClient = mock()
+        val attributes: net.schmizz.sshj.sftp.FileAttributes = mock()
+        val remoteFile: net.schmizz.sshj.sftp.RemoteFile = mock()
+
+        org.mockito.kotlin.whenever(ssh.newSFTPClient()).thenReturn(sftp)
+        org.mockito.kotlin.whenever(attributes.type)
+            .thenReturn(net.schmizz.sshj.sftp.FileMode.Type.DIRECTORY)
+        org.mockito.kotlin.whenever(sftp.statExistence("/films"))
+            .thenReturn(attributes)
+        org.mockito.kotlin.whenever(
+            sftp.open(
+                org.mockito.kotlin.any<String>(),
+                org.mockito.kotlin.any()
+            )
+        ).thenReturn(remoteFile)
+
+        org.mockito.kotlin.doThrow(java.io.IOException("Cleanup failed"))
+            .`when`(sftp)
+            .rm(org.mockito.kotlin.any())
+
+        val client = SshjNasSftpClient { ssh }
+
+        val result = client.testConnection(
+            NasSftpConnection(
+                settings = NasTransferSettings(
+                    host = "nas.example",
+                    port = 22,
+                    username = "streamvault",
+                    remoteDirectory = "/films"
+                ),
+                password = "secret".toCharArray(),
+                trustedHostKey = null
+            )
+        )
+
+        assertThat(result).isInstanceOf(NasSftpResult.Failure::class.java)
+        assertThat((result as NasSftpResult.Failure).error)
+            .isEqualTo(NasSftpError.REMOTE_TEST_CLEANUP_FAILED)
+    }
 }
