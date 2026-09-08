@@ -222,4 +222,33 @@ class SshjNasSftpClientTest {
         assertThat((result as NasSftpResult.Failure).error)
             .isEqualTo(NasSftpError.HOST_KEY_CHANGED)
     }
+
+
+    @Test
+    fun `missing remote directory is mapped to REMOTE_DIRECTORY_NOT_FOUND`() = runTest {
+        val ssh: SSHClient = mock()
+        val sftp: net.schmizz.sshj.sftp.SFTPClient = mock()
+
+        org.mockito.kotlin.whenever(ssh.newSFTPClient()).thenReturn(sftp)
+        org.mockito.kotlin.whenever(sftp.statExistence("/films")).thenReturn(null)
+
+        val client = SshjNasSftpClient { ssh }
+
+        val result = client.testConnection(
+            NasSftpConnection(
+                settings = NasTransferSettings(
+                    host = "nas.example",
+                    port = 22,
+                    username = "streamvault",
+                    remoteDirectory = "/films"
+                ),
+                password = "secret".toCharArray(),
+                trustedHostKey = null
+            )
+        )
+
+        assertThat(result).isInstanceOf(NasSftpResult.Failure::class.java)
+        assertThat((result as NasSftpResult.Failure).error)
+            .isEqualTo(NasSftpError.REMOTE_DIRECTORY_NOT_FOUND)
+    }
 }
