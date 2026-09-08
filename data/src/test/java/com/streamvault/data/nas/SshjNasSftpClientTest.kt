@@ -173,4 +173,53 @@ class SshjNasSftpClientTest {
         assertThat(confirmation.trust.host).isEqualTo("nas.example")
         assertThat(confirmation.trust.port).isEqualTo(22)
     }
+
+
+    @Test
+    fun `changed host key is mapped to HOST_KEY_CHANGED`() = runTest {
+        val ssh: SSHClient = mock()
+        var verifier: net.schmizz.sshj.transport.verification.HostKeyVerifier? = null
+
+        org.mockito.kotlin.doAnswer { invocation ->
+            verifier = invocation.getArgument(0)
+            null
+        }.`when`(ssh).addHostKeyVerifier(
+            org.mockito.kotlin.any<net.schmizz.sshj.transport.verification.HostKeyVerifier>()
+        )
+
+        val publicKey = java.security.KeyPairGenerator
+            .getInstance("RSA")
+            .apply { initialize(1024) }
+            .generateKeyPair()
+            .public
+
+        org.mockito.kotlin.doAnswer {
+            verifier!!.verify("nas.example", 22, publicKey)
+            throw java.io.IOException("Host key rejected")
+        }.`when`(ssh).connect("nas.example", 22)
+
+        val client = SshjNasSftpClient { ssh }
+
+        val result = client.testConnection(
+            NasSftpConnection(
+                settings = NasTransferSettings(
+                    host = "nas.example",
+                    port = 22,
+                    username = "streamvault",
+                    remoteDirectory = "/films"
+                ),
+                password = "secret".toCharArray(),
+                trustedHostKey = com.streamvault.domain.model.NasHostKeyTrust(
+                    host = "nas.example",
+                    port = 22,
+                    algorithm = "RSA",
+                    fingerprint = "old-fingerprint"
+                )
+            )
+        )
+
+        assertThat(result).isInstanceOf(NasSftpResult.Failure::class.java)
+        assertThat((result as NasSftpResult.Failure).error)
+            .isEqualTo(NasSftpError.HOST_KEY_CHANGED)
+    }
 }
