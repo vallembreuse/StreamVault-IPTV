@@ -72,6 +72,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging)
     implementation(libs.sshj)
+    implementation("org.bouncycastle:bcprov-jdk18on:1.80.2")
     implementation(libs.gson)
     implementation(libs.kotlinx.serialization.json)
 

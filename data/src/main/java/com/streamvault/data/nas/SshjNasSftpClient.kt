@@ -18,11 +18,13 @@ import net.schmizz.sshj.sftp.SFTPException
 import net.schmizz.sshj.sftp.FileMode.Type
 import net.schmizz.sshj.transport.verification.HostKeyVerifier
 import net.schmizz.sshj.userauth.UserAuthException
+import org.bouncycastle.jce.provider.BouncyCastleProvider
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.SocketException
 import java.net.UnknownHostException
 import java.security.PublicKey
+import java.security.Security
 import java.util.EnumSet
 import java.util.UUID
 import javax.inject.Inject
@@ -34,7 +36,7 @@ class SshjNasSftpClient internal constructor(
     private val sshClientFactory: () -> SSHClient
 ) : NasSftpClient {
     @Inject
-    constructor() : this({ SSHClient() })
+    constructor() : this({ createAndroidCompatibleSshClient() })
     override suspend fun testConnection(connection: NasSftpConnection): NasSftpResult<NasConnectionTestResult> =
         withContext(Dispatchers.IO) {
             if (connection.password.isEmpty() || connection.settings.validationErrors(requirePassword = false).isNotEmpty()) {
@@ -201,5 +203,14 @@ class SshjNasSftpClient internal constructor(
     private companion object {
         const val CONNECT_TIMEOUT_MS = 15_000
         const val SOCKET_TIMEOUT_MS = 30_000
+
+        fun createAndroidCompatibleSshClient(): SSHClient {
+            val provider = Security.getProvider(BouncyCastleProvider.PROVIDER_NAME)
+            if (provider?.javaClass != BouncyCastleProvider::class.java) {
+                Security.removeProvider(BouncyCastleProvider.PROVIDER_NAME)
+                Security.insertProviderAt(BouncyCastleProvider(), 1)
+            }
+            return SSHClient()
+        }
     }
 }
