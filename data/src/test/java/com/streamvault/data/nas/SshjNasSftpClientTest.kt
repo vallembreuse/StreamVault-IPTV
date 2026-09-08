@@ -126,4 +126,51 @@ class SshjNasSftpClientTest {
         assertThat((result as NasSftpResult.Failure).error)
             .isEqualTo(NasSftpError.DNS_OR_HOST_UNREACHABLE)
     }
+
+
+    @Test
+    fun `unknown host key requires explicit confirmation`() = runTest {
+        val ssh: SSHClient = mock()
+        var verifier: net.schmizz.sshj.transport.verification.HostKeyVerifier? = null
+
+        org.mockito.kotlin.doAnswer { invocation ->
+            verifier = invocation.getArgument(0)
+            null
+        }.`when`(ssh).addHostKeyVerifier(
+            org.mockito.kotlin.any<net.schmizz.sshj.transport.verification.HostKeyVerifier>()
+        )
+
+        val publicKey = java.security.KeyPairGenerator
+            .getInstance("RSA")
+            .apply { initialize(1024) }
+            .generateKeyPair()
+            .public
+
+        org.mockito.kotlin.doAnswer {
+            verifier!!.verify("nas.example", 22, publicKey)
+            throw java.io.IOException("Host key rejected")
+        }.`when`(ssh).connect("nas.example", 22)
+
+        val client = SshjNasSftpClient { ssh }
+
+        val result = client.testConnection(
+            NasSftpConnection(
+                settings = NasTransferSettings(
+                    host = "nas.example",
+                    port = 22,
+                    username = "streamvault",
+                    remoteDirectory = "/films"
+                ),
+                password = "secret".toCharArray(),
+                trustedHostKey = null
+            )
+        )
+
+        assertThat(result)
+            .isInstanceOf(NasSftpResult.HostKeyConfirmationRequired::class.java)
+
+        val confirmation = result as NasSftpResult.HostKeyConfirmationRequired
+        assertThat(confirmation.trust.host).isEqualTo("nas.example")
+        assertThat(confirmation.trust.port).isEqualTo(22)
+    }
 }
