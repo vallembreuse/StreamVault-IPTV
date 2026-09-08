@@ -7,7 +7,11 @@ import com.streamvault.domain.repository.NasSftpClient
 import com.streamvault.domain.repository.NasSftpConnection
 import com.streamvault.domain.repository.NasSftpError
 import com.streamvault.domain.repository.NasSftpResult
+import com.streamvault.domain.repository.NasTransferSource
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import net.schmizz.sshj.SSHClient
 import net.schmizz.sshj.common.SecurityUtils
@@ -37,6 +41,70 @@ class SshjNasSftpClient internal constructor(
 ) : NasSftpClient {
     @Inject
     constructor() : this({ createAndroidCompatibleSshClient() })
+    override suspend fun upload(
+        connection: NasSftpConnection,
+        source: NasTransferSource,
+        remotePath: String
+    ): NasSftpResult<Long> = withContext(Dispatchers.IO) {
+        val expectedSize = source.sizeBytes
+        if (expectedSize < 0L || remotePath.isBlank() || connection.password.isEmpty() ||
+            connection.settings.validationErrors(requirePassword = false).isNotEmpty()
+        ) {
+            return@withContext NasSftpResult.Failure(NasSftpError.INVALID_CONFIGURATION)
+        }
+        val uploadContext = currentCoroutineContext()
+        try {
+            uploadContext.ensureActive()
+            source.openInputStream().use { input ->
+                withSftp(connection, operationErrorsAsUnknown = true) { sftp ->
+                    val remoteFile = try {
+                        uploadContext.ensureActive()
+                        sftp.open(remotePath, EnumSet.of(OpenMode.CREAT, OpenMode.EXCL, OpenMode.WRITE))
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
+                        return@withSftp NasSftpResult.Failure(error.toDomainError(ConnectionStage.UPLOAD))
+                    }
+                    remoteFile.use { remote ->
+                        val buffer = ByteArray(32 * 1024)
+                        var bytesTransferred = 0L
+                        while (true) {
+                            uploadContext.ensureActive()
+                            val read = try {
+                                input.read(buffer)
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
+                            } catch (_: Exception) {
+                                return@withSftp NasSftpResult.Failure(NasSftpError.UNKNOWN)
+                            }
+                            if (read == -1) break
+                            if (read == 0) continue
+                            uploadContext.ensureActive()
+                            try {
+                                remote.write(bytesTransferred, buffer, 0, read)
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
+                            } catch (error: Exception) {
+                                return@withSftp NasSftpResult.Failure(error.toDomainError(ConnectionStage.UPLOAD))
+                            }
+                            bytesTransferred += read.toLong()
+                        }
+                        uploadContext.ensureActive()
+                        if (bytesTransferred == expectedSize) {
+                            NasSftpResult.Success(bytesTransferred)
+                        } else {
+                            NasSftpResult.Failure(NasSftpError.UNKNOWN)
+                        }
+                    }
+                }
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            NasSftpResult.Failure(NasSftpError.UNKNOWN)
+        }
+    }
+
     override suspend fun testConnection(connection: NasSftpConnection): NasSftpResult<NasConnectionTestResult> =
         withContext(Dispatchers.IO) {
             if (connection.password.isEmpty() || connection.settings.validationErrors(requirePassword = false).isNotEmpty()) {
@@ -126,6 +194,7 @@ class SshjNasSftpClient internal constructor(
 
     private fun <T> withSftp(
         connection: NasSftpConnection,
+        operationErrorsAsUnknown: Boolean = false,
         block: (SFTPClient) -> NasSftpResult<T>
     ): NasSftpResult<T> {
         val keyVerifier = PinnedHostKeyVerifier(connection.trustedHostKey)
@@ -139,8 +208,13 @@ class SshjNasSftpClient internal constructor(
                 stage = ConnectionStage.AUTHENTICATE
                 ssh.authPassword(connection.settings.username, connection.password)
                 stage = ConnectionStage.OPEN_SFTP
-                ssh.newSFTPClient().use(block)
+                ssh.newSFTPClient().use { sftp ->
+                    if (operationErrorsAsUnknown) stage = ConnectionStage.UPLOAD
+                    block(sftp)
+                }
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (error: Exception) {
             keyVerifier.observedTrust?.takeIf { keyVerifier.verificationRejected }?.let { observed ->
                 return if (connection.trustedHostKey == null) {
@@ -149,7 +223,13 @@ class SshjNasSftpClient internal constructor(
                     NasSftpResult.Failure(NasSftpError.HOST_KEY_CHANGED)
                 }
             }
-            NasSftpResult.Failure(error.toDomainError(stage))
+            NasSftpResult.Failure(
+                if (operationErrorsAsUnknown && stage == ConnectionStage.UPLOAD) {
+                    NasSftpError.UNKNOWN
+                } else {
+                    error.toDomainError(stage)
+                }
+            )
         }
     }
 
@@ -169,7 +249,8 @@ class SshjNasSftpClient internal constructor(
     private enum class ConnectionStage {
         CONNECT,
         AUTHENTICATE,
-        OPEN_SFTP
+        OPEN_SFTP,
+        UPLOAD
     }
 
     /** Rejects all unknown keys, while retaining the fingerprint solely for an explicit UI prompt. */

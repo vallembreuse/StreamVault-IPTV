@@ -717,4 +717,230 @@ class SshjNasSftpClientTest {
         assertThat((result as NasSftpResult.Failure).error)
             .isEqualTo(NasSftpError.REMOTE_DIRECTORY_NOT_WRITABLE)
     }
+
+    @Test
+    fun `upload copies multiple buffers with exact offsets and closes all resources`() = runTest {
+        val bytes = ByteArray(70_003) { (it % 251).toByte() }
+        val fixture = UploadFixture(bytes.size.toLong(), java.io.ByteArrayInputStream(bytes))
+        val received = java.io.ByteArrayOutputStream()
+        val lengths = mutableListOf<Int>()
+        org.mockito.kotlin.doAnswer { call ->
+            assertThat(call.getArgument<Long>(0)).isEqualTo(received.size().toLong())
+            assertThat(call.getArgument<Int>(2)).isEqualTo(0)
+            val length = call.getArgument<Int>(3)
+            received.write(call.getArgument<ByteArray>(1), 0, length)
+            lengths += length
+            null
+        }.`when`(fixture.remote).write(org.mockito.kotlin.any(), org.mockito.kotlin.any(), org.mockito.kotlin.any(), org.mockito.kotlin.any())
+
+        assertThat(fixture.upload()).isEqualTo(NasSftpResult.Success(bytes.size.toLong()))
+        assertThat(received.toByteArray()).isEqualTo(bytes)
+        assertThat(lengths.size).isGreaterThan(1)
+        assertThat(lengths.last()).isLessThan(lengths.first())
+        fixture.verifyExclusiveOpen()
+        fixture.verifyClosed()
+    }
+
+    @Test
+    fun `upload accepts an empty source without writing data`() = runTest {
+        val fixture = UploadFixture(0)
+        assertThat(fixture.upload()).isEqualTo(NasSftpResult.Success(0L))
+        fixture.verifyExclusiveOpen()
+        org.mockito.kotlin.verify(fixture.remote, org.mockito.kotlin.never()).write(org.mockito.kotlin.any(), org.mockito.kotlin.any(), org.mockito.kotlin.any(), org.mockito.kotlin.any())
+        fixture.verifyClosed()
+    }
+
+    @Test
+    fun `upload rejects negative size before opening source or connecting`() = runTest {
+        val fixture = UploadFixture(-1)
+        assertThat(fixture.upload()).isEqualTo(NasSftpResult.Failure(NasSftpError.INVALID_CONFIGURATION))
+        assertThat(fixture.sourceOpened).isFalse()
+        org.mockito.kotlin.verifyNoInteractions(fixture.ssh)
+    }
+
+    @Test
+    fun `upload maps source open failure to UNKNOWN without creating a remote file`() = runTest {
+        val fixture = UploadFixture(1, openError = java.io.IOException("Source unavailable"))
+        assertThat(fixture.upload()).isEqualTo(NasSftpResult.Failure(NasSftpError.UNKNOWN))
+        org.mockito.kotlin.verifyNoInteractions(fixture.ssh, fixture.sftp, fixture.remote)
+    }
+
+    @Test
+    fun `upload closes resources after a local read failure following data`() = runTest {
+        val input = object : java.io.ByteArrayInputStream(byteArrayOf(1, 2, 3)) {
+            private var first = true
+            override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+                if (!first) throw java.net.SocketException("Local provider failed")
+                first = false
+                return super.read(buffer, offset, length)
+            }
+        }
+        val fixture = UploadFixture(6, input)
+        assertThat(fixture.upload()).isEqualTo(NasSftpResult.Failure(NasSftpError.UNKNOWN))
+        org.mockito.kotlin.verify(fixture.remote).write(org.mockito.kotlin.eq(0L), org.mockito.kotlin.any(), org.mockito.kotlin.eq(0), org.mockito.kotlin.eq(3))
+        fixture.verifyClosed()
+    }
+
+    @Test
+    fun `upload refuses an existing remote target without writing or deleting`() = runTest {
+        val fixture = UploadFixture(1, java.io.ByteArrayInputStream(byteArrayOf(1)))
+        org.mockito.kotlin.whenever(fixture.sftp.open(org.mockito.kotlin.any<String>(), org.mockito.kotlin.any()))
+            .thenThrow(net.schmizz.sshj.sftp.SFTPException("Already exists"))
+        assertThat(fixture.upload()).isEqualTo(NasSftpResult.Failure(NasSftpError.UNKNOWN))
+        fixture.verifyExclusiveOpen()
+        org.mockito.kotlin.verifyNoInteractions(fixture.remote)
+        fixture.verifyClosed(remoteOpened = false)
+    }
+
+    @Test
+    fun `upload maps remote write failure to UNKNOWN and closes resources`() = runTest {
+        val fixture = UploadFixture(1, java.io.ByteArrayInputStream(byteArrayOf(1)))
+        doThrow(net.schmizz.sshj.sftp.SFTPException("Write failed"))
+            .`when`(fixture.remote).write(org.mockito.kotlin.any(), org.mockito.kotlin.any(), org.mockito.kotlin.any(), org.mockito.kotlin.any())
+        assertThat(fixture.upload()).isEqualTo(NasSftpResult.Failure(NasSftpError.UNKNOWN))
+        fixture.verifyClosed()
+    }
+
+    @Test
+    fun `upload preserves a remote write timeout`() = runTest {
+        val fixture = UploadFixture(1, java.io.ByteArrayInputStream(byteArrayOf(1)))
+        doThrow(java.net.SocketTimeoutException("Write timeout"))
+            .`when`(fixture.remote).write(org.mockito.kotlin.any(), org.mockito.kotlin.any(), org.mockito.kotlin.any(), org.mockito.kotlin.any())
+        assertThat(fixture.upload()).isEqualTo(NasSftpResult.Failure(NasSftpError.TIMEOUT))
+        fixture.verifyClosed()
+    }
+
+    @Test
+    fun `upload fails when EOF precedes the declared size`() = runTest {
+        val fixture = UploadFixture(4, java.io.ByteArrayInputStream(byteArrayOf(1, 2)))
+        assertThat(fixture.upload()).isEqualTo(NasSftpResult.Failure(NasSftpError.UNKNOWN))
+        fixture.verifyClosed()
+    }
+
+    @Test
+    fun `upload reads through EOF but fails when source exceeds declared size`() = runTest {
+        val fixture = UploadFixture(1, java.io.ByteArrayInputStream(byteArrayOf(1, 2, 3)))
+        assertThat(fixture.upload()).isEqualTo(NasSftpResult.Failure(NasSftpError.UNKNOWN))
+        org.mockito.kotlin.verify(fixture.remote).write(org.mockito.kotlin.eq(0L), org.mockito.kotlin.any(), org.mockito.kotlin.eq(0), org.mockito.kotlin.eq(3))
+        fixture.verifyClosed()
+    }
+
+    @Test
+    fun `upload propagates cancellation and closes opened resources`() = runTest {
+        val fixture = UploadFixture(1, java.io.ByteArrayInputStream(byteArrayOf(1)))
+        val cancellation = kotlinx.coroutines.CancellationException("Cancelled")
+        doThrow(cancellation).`when`(fixture.remote).write(org.mockito.kotlin.any(), org.mockito.kotlin.any(), org.mockito.kotlin.any(), org.mockito.kotlin.any())
+        var caught: kotlinx.coroutines.CancellationException? = null
+        try {
+            fixture.upload()
+            throw AssertionError("Cancellation must propagate")
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            caught = error
+        }
+        assertThat(caught).isNotNull()
+        assertThat(caught!!.message).isEqualTo(cancellation.message)
+        fixture.verifyClosed()
+    }
+
+    @Test
+    fun `upload cannot succeed when remote close fails`() = runTest {
+        val fixture = UploadFixture(0)
+        doThrow(net.schmizz.sshj.sftp.SFTPException("Close failed")).`when`(fixture.remote).close()
+        assertThat(fixture.upload()).isEqualTo(NasSftpResult.Failure(NasSftpError.UNKNOWN))
+        fixture.verifyClosed()
+    }
+
+    @Test
+    fun `upload cannot succeed when source close fails`() = runTest {
+        val fixture = UploadFixture(0, object : java.io.ByteArrayInputStream(byteArrayOf()) {
+            override fun close() { throw java.io.IOException("Close failed") }
+        })
+        assertThat(fixture.upload()).isEqualTo(NasSftpResult.Failure(NasSftpError.UNKNOWN))
+        fixture.verifyClosed()
+    }
+
+    @Test
+    fun `upload cannot succeed when SFTP or SSH close fails`() = runTest {
+        for (closeSftp in listOf(true, false)) {
+            val fixture = UploadFixture(0)
+            if (closeSftp) {
+                doThrow(java.io.IOException("Close failed")).`when`(fixture.sftp).close()
+            } else {
+                doThrow(java.io.IOException("Close failed")).`when`(fixture.ssh).close()
+            }
+            assertThat(fixture.upload()).isEqualTo(NasSftpResult.Failure(NasSftpError.UNKNOWN))
+            fixture.verifyClosed()
+        }
+    }
+
+    @Test
+    fun `upload preserves SFTP opening timeout and closes source and SSH`() = runTest {
+        val fixture = UploadFixture(0)
+        org.mockito.kotlin.whenever(fixture.ssh.newSFTPClient())
+            .thenThrow(java.net.SocketTimeoutException("SFTP opening timeout"))
+        assertThat(fixture.upload()).isEqualTo(NasSftpResult.Failure(NasSftpError.TIMEOUT))
+        assertThat(fixture.sourceCloseCount).isEqualTo(1)
+        org.mockito.kotlin.verify(fixture.ssh).close()
+        org.mockito.kotlin.verifyNoInteractions(fixture.sftp, fixture.remote)
+    }
+
+    private class UploadFixture(
+        size: Long,
+        input: java.io.InputStream = java.io.ByteArrayInputStream(byteArrayOf()),
+        private val openError: Exception? = null
+    ) {
+        val ssh: SSHClient = mock()
+        val sftp: net.schmizz.sshj.sftp.SFTPClient = mock()
+        val remote: net.schmizz.sshj.sftp.RemoteFile = mock()
+        var sourceOpened = false
+        var sourceCloseCount = 0
+            private set
+        private val stream = object : java.io.FilterInputStream(input) {
+            override fun close() {
+                sourceCloseCount++
+                super.close()
+            }
+        }
+        private val source = object : com.streamvault.domain.repository.NasTransferSource {
+            override val sizeBytes = size
+            override val displayName: String get() = error("Upload must not read displayName")
+            override val uriString: String get() = error("Upload must not read uriString")
+            override suspend fun openInputStream(): java.io.InputStream {
+                sourceOpened = true
+                openError?.let { throw it }
+                return stream
+            }
+            override suspend fun openInputStreamAt(offsetBytes: Long): java.io.InputStream? =
+                error("Upload must not seek")
+            override suspend fun deleteAfterValidatedTransfer(): Boolean =
+                error("Upload must preserve the local source")
+        }
+        init {
+            org.mockito.kotlin.whenever(ssh.newSFTPClient()).thenReturn(sftp)
+            org.mockito.kotlin.whenever(sftp.open(org.mockito.kotlin.any<String>(), org.mockito.kotlin.any())).thenReturn(remote)
+        }
+        suspend fun upload(): NasSftpResult<Long> = SshjNasSftpClient { ssh }.upload(
+            NasSftpConnection(
+                NasTransferSettings(host = "nas.example", username = "streamvault", remoteDirectory = "/films"),
+                "secret".toCharArray(),
+                null
+            ),
+            source,
+            "/films/test-file.bin"
+        )
+        fun verifyExclusiveOpen() {
+            org.mockito.kotlin.verify(sftp).open(
+                "/films/test-file.bin",
+                java.util.EnumSet.of(net.schmizz.sshj.sftp.OpenMode.CREAT, net.schmizz.sshj.sftp.OpenMode.EXCL, net.schmizz.sshj.sftp.OpenMode.WRITE)
+            )
+        }
+        fun verifyClosed(remoteOpened: Boolean = true) {
+            assertThat(sourceCloseCount).isEqualTo(1)
+            if (remoteOpened) org.mockito.kotlin.verify(remote).close()
+            org.mockito.kotlin.verify(sftp).close()
+            org.mockito.kotlin.verify(ssh).close()
+            org.mockito.kotlin.verify(sftp, org.mockito.kotlin.never()).rm(org.mockito.kotlin.any())
+            org.mockito.kotlin.verify(sftp, org.mockito.kotlin.never()).statExistence(org.mockito.kotlin.any())
+        }
+    }
 }

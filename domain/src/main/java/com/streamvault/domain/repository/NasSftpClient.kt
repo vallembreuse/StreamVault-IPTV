@@ -42,9 +42,20 @@ data class NasConnectionTestResult(
 )
 
 /**
- * The Lot 1 boundary for SSH/SFTP. Upload, rename, and resume are deliberately deferred to Lot 2.
+ * SSH/SFTP operations. Rename and resume are deliberately deferred.
  */
 interface NasSftpClient {
+    /**
+     * Copies [source] from offset zero to a newly created [remotePath], refusing to overwrite it.
+     * Success contains the exact byte count, equal to the non-negative source size, after closure.
+     * Keeps the local source. Failure may leave a partial remote file; cancellation is propagated.
+     */
+    suspend fun upload(
+        connection: NasSftpConnection,
+        source: NasTransferSource,
+        remotePath: String
+    ): NasSftpResult<Long>
+
     suspend fun testConnection(connection: NasSftpConnection): NasSftpResult<NasConnectionTestResult>
 
     suspend fun stat(connection: NasSftpConnection, remotePath: String): NasSftpResult<NasRemoteFile?>
