@@ -6,6 +6,7 @@ import com.streamvault.data.manager.DownloadManagerImpl
 import com.streamvault.data.preferences.PreferencesRepository
 import com.streamvault.data.security.AndroidKeystoreCredentialCrypto
 import com.streamvault.data.security.CredentialCrypto
+import com.streamvault.data.nas.NasTransferRepositoryImpl
 import com.streamvault.data.nas.AndroidNasCredentialStore
 import com.streamvault.data.nas.NasTransferSettingsRepositoryImpl
 import com.streamvault.data.nas.SshjNasSftpClient
@@ -151,6 +152,10 @@ abstract class RepositoryModule {
     abstract fun bindNasTransferSettingsRepository(
         impl: NasTransferSettingsRepositoryImpl
     ): NasTransferSettingsRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindNasTransferRepository(impl: NasTransferRepositoryImpl): NasTransferRepository
 
     @Binds @Singleton
     abstract fun bindNasCredentialStore(impl: AndroidNasCredentialStore): NasCredentialStore
