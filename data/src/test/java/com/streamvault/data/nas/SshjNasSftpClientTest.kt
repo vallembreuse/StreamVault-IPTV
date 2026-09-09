@@ -939,6 +939,118 @@ class SshjNasSftpClientTest {
         assertThat(authenticationCopies.all { copy -> copy.all { it == '\u0000' } }).isTrue()
     }
 
+    @Test
+    fun `rename uses only the standard overload with exact paths`() = runTest {
+        val fixture = RenameFixture()
+        assertThat(fixture.rename()).isEqualTo(NasSftpResult.Success(Unit))
+        fixture.verifySingleStandardRenameAndClosure()
+    }
+
+    @Test
+    fun `rename server refusal fails without fallback`() = runTest {
+        val fixture = RenameFixture(net.schmizz.sshj.sftp.SFTPException("Permission denied"))
+        assertThat(fixture.rename()).isEqualTo(NasSftpResult.Failure(NasSftpError.UNKNOWN))
+        fixture.verifySingleStandardRenameAndClosure()
+    }
+
+    @Test
+    fun `rename missing source maps to UNKNOWN rather than directory not found`() = runTest {
+        val fixture = RenameFixture(net.schmizz.sshj.sftp.SFTPException(
+            net.schmizz.sshj.sftp.Response.StatusCode.NO_SUCH_FILE, "Source absent"
+        ))
+        assertThat(fixture.rename()).isEqualTo(NasSftpResult.Failure(NasSftpError.UNKNOWN))
+        fixture.verifySingleStandardRenameAndClosure()
+    }
+
+    @Test
+    fun `rename existing destination fails without overwrite or second attempt`() = runTest {
+        val fixture = RenameFixture(net.schmizz.sshj.sftp.SFTPException("Destination exists"))
+        assertThat(fixture.rename()).isEqualTo(NasSftpResult.Failure(NasSftpError.UNKNOWN))
+        fixture.verifySingleStandardRenameAndClosure()
+    }
+
+    @Test
+    fun `rename generic exception fails and closes resources`() = runTest {
+        val fixture = RenameFixture(java.io.IOException("Rename failed"))
+        assertThat(fixture.rename()).isEqualTo(NasSftpResult.Failure(NasSftpError.UNKNOWN))
+        fixture.verifySingleStandardRenameAndClosure()
+    }
+
+    @Test
+    fun `rename propagates cancellation and closes resources`() = runTest {
+        val fixture = RenameFixture(kotlinx.coroutines.CancellationException("Rename cancelled"))
+        try {
+            fixture.rename()
+            throw AssertionError("Cancellation must propagate")
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            assertThat(cancelled.message).isEqualTo("Rename cancelled")
+        }
+        fixture.verifySingleStandardRenameAndClosure()
+    }
+
+    @Test
+    fun `rename rejects blank paths and invalid configuration before connecting`() = runTest {
+        val fixture = RenameFixture()
+        val invalidCalls = listOf(
+            Triple(fixture.connection, " ", "/films/destination.bin"),
+            Triple(fixture.connection, "/films/source.bin", ""),
+            Triple(NasSftpConnection(fixture.connection.settings.copy(host = ""), charArrayOf('t'), null), "/films/source.bin", "/films/destination.bin"),
+            Triple(NasSftpConnection(fixture.connection.settings, charArrayOf(), null), "/films/source.bin", "/films/destination.bin")
+        )
+        for ((connection, source, destination) in invalidCalls) {
+            assertThat(fixture.client.rename(connection, source, destination))
+                .isEqualTo(NasSftpResult.Failure(NasSftpError.INVALID_CONFIGURATION))
+        }
+        org.mockito.kotlin.verifyNoInteractions(fixture.ssh, fixture.sftp)
+    }
+
+    @Test
+    fun `rename preserves connection errors without attempting an operation`() = runTest {
+        val fixture = RenameFixture()
+        doThrow(java.net.ConnectException("Connection refused"))
+            .`when`(fixture.ssh).connect("nas.example", 22)
+        assertThat(fixture.rename()).isEqualTo(NasSftpResult.Failure(NasSftpError.CONNECTION_REFUSED))
+        org.mockito.kotlin.verifyNoInteractions(fixture.sftp)
+        org.mockito.kotlin.verify(fixture.ssh).close()
+    }
+
+    @Test
+    fun `rename close failure prevents success`() = runTest {
+        val fixture = RenameFixture()
+        doThrow(java.io.IOException("Close failed")).`when`(fixture.sftp).close()
+        assertThat(fixture.rename()).isEqualTo(NasSftpResult.Failure(NasSftpError.UNKNOWN))
+        fixture.verifySingleStandardRenameAndClosure()
+    }
+
+    private class RenameFixture(error: Exception? = null) {
+        val ssh: SSHClient = mock()
+        val sftp: net.schmizz.sshj.sftp.SFTPClient = mock()
+        val connection = NasSftpConnection(
+            NasTransferSettings(host = "nas.example", username = "streamvault", remoteDirectory = "/films"),
+            charArrayOf('t', 'e', 's', 't'),
+            null
+        )
+        val client = SshjNasSftpClient { ssh }
+
+        init {
+            org.mockito.kotlin.whenever(ssh.newSFTPClient()).thenReturn(sftp)
+            if (error != null) {
+                doThrow(error).`when`(sftp).rename("/films/source.bin", "/films/destination.bin")
+            }
+        }
+
+        suspend fun rename(): NasSftpResult<Unit> =
+            client.rename(connection, "/films/source.bin", "/films/destination.bin")
+
+        fun verifySingleStandardRenameAndClosure() {
+            org.mockito.kotlin.verify(sftp).rename("/films/source.bin", "/films/destination.bin")
+            org.mockito.kotlin.verify(sftp).close()
+            // Excludes flags overload, stat, deletion, and any second rename attempt.
+            org.mockito.kotlin.verifyNoMoreInteractions(sftp)
+            org.mockito.kotlin.verify(ssh).close()
+        }
+    }
+
     private class UploadFixture(
         size: Long,
         input: java.io.InputStream = java.io.ByteArrayInputStream(byteArrayOf()),

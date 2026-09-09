@@ -42,7 +42,7 @@ data class NasConnectionTestResult(
 )
 
 /**
- * SSH/SFTP operations. Rename and resume are deliberately deferred.
+ * SSH/SFTP operations. Resume is deliberately deferred.
  */
 interface NasSftpClient {
     /**
@@ -55,6 +55,16 @@ interface NasSftpClient {
         source: NasTransferSource,
         remotePath: String
     ): NasSftpResult<Long>
+
+    /**
+     * Requests standard SFTP rename, without overwrite flags or destructive fallback.
+     * Atomicity and concurrent destination handling depend on the server implementation.
+     */
+    suspend fun rename(
+        connection: NasSftpConnection,
+        sourcePath: String,
+        destinationPath: String
+    ): NasSftpResult<Unit>
 
     suspend fun testConnection(connection: NasSftpConnection): NasSftpResult<NasConnectionTestResult>
 

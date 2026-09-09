@@ -105,6 +105,25 @@ class SshjNasSftpClient internal constructor(
         }
     }
 
+    override suspend fun rename(
+        connection: NasSftpConnection,
+        sourcePath: String,
+        destinationPath: String
+    ): NasSftpResult<Unit> = withContext(Dispatchers.IO) {
+        if (sourcePath.isBlank() || destinationPath.isBlank() || connection.password.isEmpty() ||
+            connection.settings.validationErrors(requirePassword = false).isNotEmpty()
+        ) {
+            return@withContext NasSftpResult.Failure(NasSftpError.INVALID_CONFIGURATION)
+        }
+        val renameContext = currentCoroutineContext()
+        renameContext.ensureActive()
+        withSftp(connection, operationErrorsAsUnknown = true) { sftp ->
+            renameContext.ensureActive()
+            sftp.rename(sourcePath, destinationPath)
+            NasSftpResult.Success(Unit)
+        }
+    }
+
     override suspend fun testConnection(connection: NasSftpConnection): NasSftpResult<NasConnectionTestResult> =
         withContext(Dispatchers.IO) {
             if (connection.password.isEmpty() || connection.settings.validationErrors(requirePassword = false).isNotEmpty()) {
