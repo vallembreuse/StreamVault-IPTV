@@ -206,7 +206,12 @@ class SshjNasSftpClient internal constructor(
                 ssh.addHostKeyVerifier(keyVerifier)
                 ssh.connect(connection.settings.host, connection.settings.port)
                 stage = ConnectionStage.AUTHENTICATE
-                ssh.authPassword(connection.settings.username, connection.password)
+                val authenticationPassword = connection.password.copyOf()
+                try {
+                    ssh.authPassword(connection.settings.username, authenticationPassword)
+                } finally {
+                    authenticationPassword.fill('\u0000')
+                }
                 stage = ConnectionStage.OPEN_SFTP
                 ssh.newSFTPClient().use { sftp ->
                     if (operationErrorsAsUnknown) stage = ConnectionStage.UPLOAD

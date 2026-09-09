@@ -884,6 +884,61 @@ class SshjNasSftpClientTest {
         org.mockito.kotlin.verifyNoInteractions(fixture.sftp, fixture.remote)
     }
 
+    @Test
+    fun `upload and remote size reuse connection without SSHJ erasing its password`() = runTest {
+        val originalPassword = charArrayOf('t', 'e', 's', 't')
+        val expectedPassword = originalPassword.copyOf()
+        val connection = NasSftpConnection(
+            NasTransferSettings(host = "nas.example", username = "streamvault", remoteDirectory = "/films"),
+            originalPassword,
+            null
+        )
+        val uploadSsh: SSHClient = mock()
+        val sizeSsh: SSHClient = mock()
+        val uploadSftp: net.schmizz.sshj.sftp.SFTPClient = mock()
+        val sizeSftp: net.schmizz.sshj.sftp.SFTPClient = mock()
+        val remote: net.schmizz.sshj.sftp.RemoteFile = mock()
+        val attributes: net.schmizz.sshj.sftp.FileAttributes = mock()
+        val source: com.streamvault.domain.repository.NasTransferSource = mock()
+        val authenticationCopies = mutableListOf<CharArray>()
+
+        org.mockito.kotlin.whenever(uploadSsh.newSFTPClient()).thenReturn(uploadSftp)
+        org.mockito.kotlin.whenever(sizeSsh.newSFTPClient()).thenReturn(sizeSftp)
+        org.mockito.kotlin.whenever(uploadSftp.open(org.mockito.kotlin.any<String>(), org.mockito.kotlin.any()))
+            .thenReturn(remote)
+        org.mockito.kotlin.whenever(sizeSftp.statExistence("/films/test-file.bin")).thenReturn(attributes)
+        org.mockito.kotlin.whenever(attributes.size).thenReturn(0L)
+        org.mockito.kotlin.whenever(attributes.type).thenReturn(net.schmizz.sshj.sftp.FileMode.Type.REGULAR)
+        org.mockito.kotlin.whenever(source.sizeBytes).thenReturn(0L)
+        org.mockito.kotlin.whenever(source.openInputStream()).thenReturn(java.io.ByteArrayInputStream(byteArrayOf()))
+        listOf(uploadSsh, sizeSsh).forEachIndexed { index, ssh ->
+            org.mockito.kotlin.doAnswer { invocation ->
+                val received = invocation.getArgument<CharArray>(1)
+                // Assert booleans only: a failure must never print credential contents.
+                assertThat(received === originalPassword).isFalse()
+                assertThat(received.contentEquals(expectedPassword)).isTrue()
+                assertThat(authenticationCopies.any { it === received }).isFalse()
+                authenticationCopies += received
+                // First mimic SSHJ's blankOut; then leave a mutation for our finally to erase.
+                received.fill(if (index == 0) '\u0000' else 'x')
+                null
+            }.`when`(ssh).authPassword(org.mockito.kotlin.eq("streamvault"), org.mockito.kotlin.any<CharArray>())
+        }
+        val sessions = listOf(uploadSsh, sizeSsh).iterator()
+        val client = SshjNasSftpClient { sessions.next() }
+
+        assertThat(client.upload(connection, source, "/films/test-file.bin")).isEqualTo(NasSftpResult.Success(0L))
+        assertThat(authenticationCopies.size).isEqualTo(1)
+        assertThat(originalPassword.contentEquals(expectedPassword)).isTrue()
+        assertThat(authenticationCopies.single().all { it == '\u0000' }).isTrue()
+
+        assertThat(client.getRemoteSize(connection, "/films/test-file.bin")).isEqualTo(NasSftpResult.Success(0L))
+        assertThat(authenticationCopies.size).isEqualTo(2)
+        assertThat(connection.password === originalPassword).isTrue()
+        assertThat(originalPassword.contentEquals(expectedPassword)).isTrue()
+        assertThat(authenticationCopies.all { copy -> copy.all { it == '\u0000' } }).isTrue()
+    }
+
     private class UploadFixture(
         size: Long,
         input: java.io.InputStream = java.io.ByteArrayInputStream(byteArrayOf()),
