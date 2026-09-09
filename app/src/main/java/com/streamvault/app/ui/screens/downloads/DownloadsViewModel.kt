@@ -7,6 +7,15 @@ import android.net.Uri
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.streamvault.data.nas.NasTransferExecutor
+import com.streamvault.domain.model.NasTransfer
+import com.streamvault.domain.model.NasTransferStatus
+import com.streamvault.domain.repository.NasTransferRepository
+import com.streamvault.domain.repository.NasTransferSettingsRepository
+import java.util.UUID
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import com.streamvault.app.R
 import com.streamvault.domain.model.DownloadItem
 import com.streamvault.domain.repository.DownloadManager
@@ -28,6 +37,9 @@ import kotlinx.coroutines.cancel
 @HiltViewModel
 class DownloadsViewModel @Inject constructor(
     private val downloadManager: DownloadManager,
+    private val nasTransfers: NasTransferRepository,
+    private val nasSettings: NasTransferSettingsRepository,
+    private val nasExecutor: NasTransferExecutor,
     @ApplicationContext private val application: Context
 ) : ViewModel() {
 
@@ -46,6 +58,56 @@ class DownloadsViewModel @Inject constructor(
         viewModelScope.launch {
             downloadManager.observeStorageState().collect { storageConfig ->
                 _uiState.update { it.copy(storageConfig = storageConfig) }
+            }
+        }
+    }
+
+    fun transferToNas(item: DownloadItem) {
+        val download = _uiState.value.downloads.find { it.id == item.id } ?: return
+        if (!item.canTransferToNas() || !download.canTransferToNas() || _uiState.value.nasTransferInProgress) return
+        _uiState.update { it.copy(nasTransferInProgress = true) }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val uri = download.outputUri?.takeIf { it.isNotBlank() }
+                // outputDisplayPath is an existing display name/path; outputUri stays opaque.
+                val name = download.outputDisplayPath?.substringAfterLast('/')?.takeIf {
+                    it.isNotBlank() && it != "." && it != ".."
+                }
+                if (uri == null || name == null) {
+                    _uiState.update { it.copy(userMessage = application.getString(R.string.downloads_nas_source_unavailable)) }
+                    return@launch
+                }
+                val settings = nasSettings.observeSettings().first()
+                if (!settings.enabled || settings.validationErrors(requirePassword = false).isNotEmpty() ||
+                    settings.trustedHostKey == null
+                ) {
+                    _uiState.update { it.copy(userMessage = application.getString(R.string.downloads_nas_configuration_required)) }
+                    return@launch
+                }
+                val now = System.currentTimeMillis()
+                val transfer = NasTransfer(
+                    id = UUID.randomUUID().toString(), downloadId = download.id,
+                    contentName = download.contentName, localFileName = name, localSourceUri = uri,
+                    localSizeBytes = download.bytesWritten, remoteDirectory = settings.remoteDirectory,
+                    remoteFinalName = name, remoteTemporaryName = "$name.part",
+                    status = NasTransferStatus.PENDING, bytesTransferred = 0L, totalBytes = download.bytesWritten,
+                    createdAt = now, updatedAt = now
+                )
+                nasTransfers.insert(transfer)
+                val persisted = nasExecutor.execute(transfer.id)
+                val message = if (persisted) when (nasTransfers.getById(transfer.id)?.status) {
+                    NasTransferStatus.TRANSFERRED -> R.string.downloads_nas_transferred
+                    NasTransferStatus.ALREADY_PRESENT -> R.string.downloads_nas_already_present
+                    NasTransferStatus.CONFLICT -> R.string.downloads_nas_conflict
+                    else -> R.string.downloads_nas_failed
+                } else R.string.downloads_nas_failed
+                _uiState.update { it.copy(userMessage = application.getString(message)) }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                _uiState.update { it.copy(userMessage = application.getString(R.string.downloads_nas_failed)) }
+            } finally {
+                _uiState.update { it.copy(nasTransferInProgress = false) }
             }
         }
     }

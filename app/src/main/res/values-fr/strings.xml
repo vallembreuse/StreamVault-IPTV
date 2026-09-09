@@ -1514,4 +1514,11 @@
     <string name="settings_remote_selection_global_default">Use global default: %1$s</string>
     <string name="settings_remote_dialog_title">%1$s action</string>
     <string name="settings_remote_dialog_subtitle">Choose what this colored button should do in %1$s.</string>
+    <string name="downloads_transfer_to_nas">Transférer vers le NAS</string>
+    <string name="downloads_nas_source_unavailable">Le fichier téléchargé est indisponible.</string>
+    <string name="downloads_nas_configuration_required">Activez et configurez le NAS dans les paramètres.</string>
+    <string name="downloads_nas_transferred">Transfert vers le NAS terminé. Le fichier local est conservé.</string>
+    <string name="downloads_nas_already_present">Le fichier est déjà présent sur le NAS.</string>
+    <string name="downloads_nas_conflict">Un fichier différent existe déjà sur le NAS.</string>
+    <string name="downloads_nas_failed">Le transfert vers le NAS n’a pas pu être terminé.</string>
 </resources>

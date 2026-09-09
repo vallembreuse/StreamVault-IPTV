@@ -122,7 +122,9 @@ fun DownloadsScreen(
                             viewModel.playDownload(download)?.let(context::startActivity)
                         },
                         onResumeClick = viewModel::resumeDownload,
-                        onDeleteClick = viewModel::showDeleteConfirm
+                        onDeleteClick = viewModel::showDeleteConfirm,
+                        onNasClick = viewModel::transferToNas,
+                        nasTransferInProgress = uiState.nasTransferInProgress
                     )
                 }
             }
@@ -198,7 +200,9 @@ private fun DownloadsGrid(
     downloads: List<DownloadItem>,
     onOpenClick: (DownloadItem) -> Unit,
     onResumeClick: (DownloadItem) -> Unit,
-    onDeleteClick: (DownloadItem) -> Unit
+    onDeleteClick: (DownloadItem) -> Unit,
+    onNasClick: (DownloadItem) -> Unit,
+    nasTransferInProgress: Boolean
 ) {
     val columns = if (LocalConfiguration.current.screenWidthDp < 700) {
         GridCells.Adaptive(180.dp)
@@ -218,7 +222,9 @@ private fun DownloadsGrid(
                 download = download,
                 onOpenClick = { onOpenClick(download) },
                 onResumeClick = { onResumeClick(download) },
-                onDeleteClick = { onDeleteClick(download) }
+                onDeleteClick = { onDeleteClick(download) },
+                onNasClick = { onNasClick(download) },
+                nasTransferInProgress = nasTransferInProgress
             )
         }
     }
@@ -229,7 +235,9 @@ private fun DownloadCard(
     download: DownloadItem,
     onOpenClick: () -> Unit,
     onResumeClick: () -> Unit,
-    onDeleteClick: () -> Unit
+    onDeleteClick: () -> Unit,
+    onNasClick: () -> Unit,
+    nasTransferInProgress: Boolean
 ) {
     val progress = download.totalBytes?.takeIf { it > 0L }?.let { total ->
         (download.bytesWritten.toFloat() / total.toFloat()).coerceIn(0f, 1f)
@@ -311,6 +319,11 @@ private fun DownloadCard(
                 )
             }
 
+            if (download.canTransferToNas()) {
+                TextButton(onClick = onNasClick, enabled = !nasTransferInProgress) {
+                    Text(stringResource(R.string.downloads_transfer_to_nas))
+                }
+            }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()

@@ -1882,4 +1882,11 @@
     <string name="nav_vod">VOD</string>
     <string name="vod_unavailable_title">VOD is unavailable</string>
     <string name="vod_unavailable_subtitle">This provider exposes separate Movies and Series catalogs.</string>
+    <string name="downloads_transfer_to_nas">Transfer to NAS</string>
+    <string name="downloads_nas_source_unavailable">The downloaded file is unavailable.</string>
+    <string name="downloads_nas_configuration_required">Enable and configure the NAS in Settings.</string>
+    <string name="downloads_nas_transferred">Transfer to NAS completed. The local file was kept.</string>
+    <string name="downloads_nas_already_present">The file is already present on the NAS.</string>
+    <string name="downloads_nas_conflict">A different file already exists on the NAS.</string>
+    <string name="downloads_nas_failed">The transfer to the NAS could not be completed.</string>
 </resources>
