@@ -71,7 +71,39 @@ class NasTransferExecutor @Inject constructor(
             val running = active ?: return false
             currentCoroutineContext().ensureActive()
             val finalPath = pending.remoteDirectory.trimEnd('/') + "/" + pending.remoteFinalName
-            val result = publisher.publish(NasSftpConnection(settings, secret, trust), source, finalPath)
+            var lastProgressPersistedAtNanos = System.nanoTime()
+            var lastProgressUpdatedAt = running.updatedAt
+            val progressPersistIntervalNanos = 1_000_000_000L
+
+            val result = publisher.publish(
+                NasSftpConnection(settings, secret, trust),
+                source,
+                finalPath
+            ) { bytesTransferred ->
+                val nowNanos = System.nanoTime()
+                val completedUpload = bytesTransferred == running.totalBytes
+                if (completedUpload ||
+                    nowNanos - lastProgressPersistedAtNanos >= progressPersistIntervalNanos
+                ) {
+                    val progressUpdatedAt = maxOf(System.currentTimeMillis(), lastProgressUpdatedAt)
+                    val persisted = try {
+                        repository.updateProgress(
+                            running.id,
+                            bytesTransferred,
+                            progressUpdatedAt
+                        )
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        false
+                    }
+
+                    if (persisted) {
+                        lastProgressPersistedAtNanos = nowNanos
+                        lastProgressUpdatedAt = progressUpdatedAt
+                    }
+                }
+            }
             val status = when (result) {
                 NasPublicationResult.Success -> NasTransferStatus.TRANSFERRED
                 NasPublicationResult.AlreadyPresent -> NasTransferStatus.ALREADY_PRESENT

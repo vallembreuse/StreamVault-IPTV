@@ -736,10 +736,20 @@ class SshjNasSftpClientTest {
             org.mockito.kotlin.any()
         )
 
-        assertThat(fixture.upload()).isEqualTo(NasSftpResult.Success(bytes.size.toLong()))
+        val progress = mutableListOf<Long>()
+
+        assertThat(fixture.uploadWithProgress { progress += it })
+            .isEqualTo(NasSftpResult.Success(bytes.size.toLong()))
         assertThat(received.toByteArray()).isEqualTo(bytes)
         assertThat(lengths.size).isGreaterThan(1)
         assertThat(lengths.last()).isLessThan(lengths.first())
+
+        val expectedProgress = lengths
+            .runningFold(0L) { total, length -> total + length }
+            .drop(1)
+        assertThat(progress).containsExactlyElementsIn(expectedProgress).inOrder()
+        assertThat(progress.last()).isEqualTo(bytes.size.toLong())
+
         fixture.verifyExclusiveOpen()
         fixture.verifyClosed()
     }
@@ -1122,6 +1132,18 @@ class SshjNasSftpClientTest {
             ),
             source,
             "/films/test-file.bin"
+        )
+        suspend fun uploadWithProgress(
+            onProgress: suspend (Long) -> Unit
+        ): NasSftpResult<Long> = SshjNasSftpClient({ ssh }) { output }.upload(
+            NasSftpConnection(
+                NasTransferSettings(host = "nas.example", username = "streamvault", remoteDirectory = "/films"),
+                "secret".toCharArray(),
+                null
+            ),
+            source,
+            "/films/test-file.bin",
+            onProgress
         )
         fun verifyExclusiveOpen() {
             org.mockito.kotlin.verify(sftp).open(

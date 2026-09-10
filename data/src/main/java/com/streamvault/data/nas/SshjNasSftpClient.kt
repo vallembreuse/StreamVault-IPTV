@@ -51,6 +51,14 @@ class SshjNasSftpClient internal constructor(
         connection: NasSftpConnection,
         source: NasTransferSource,
         remotePath: String
+    ): NasSftpResult<Long> =
+        upload(connection, source, remotePath) { _ -> }
+
+    override suspend fun upload(
+        connection: NasSftpConnection,
+        source: NasTransferSource,
+        remotePath: String,
+        onProgress: suspend (bytesTransferred: Long) -> Unit
     ): NasSftpResult<Long> = withContext(Dispatchers.IO) {
         val expectedSize = source.sizeBytes
         if (expectedSize < 0L || remotePath.isBlank() || connection.password.isEmpty() ||
@@ -95,6 +103,7 @@ class SshjNasSftpClient internal constructor(
                                     return@withSftp NasSftpResult.Failure(error.toDomainError(ConnectionStage.UPLOAD))
                                 }
                                 bytesTransferred += read.toLong()
+                                onProgress(bytesTransferred)
                             }
                             uploadContext.ensureActive()
                         }
@@ -219,10 +228,10 @@ class SshjNasSftpClient internal constructor(
     private fun joinRemotePath(directory: String, child: String): String =
         if (directory.endsWith('/')) "$directory$child" else "$directory/$child"
 
-    private fun <T> withSftp(
+    private suspend fun <T> withSftp(
         connection: NasSftpConnection,
         operationErrorsAsUnknown: Boolean = false,
-        block: (SFTPClient) -> NasSftpResult<T>
+        block: suspend (SFTPClient) -> NasSftpResult<T>
     ): NasSftpResult<T> {
         val keyVerifier = PinnedHostKeyVerifier(connection.trustedHostKey)
         var stage = ConnectionStage.CONNECT

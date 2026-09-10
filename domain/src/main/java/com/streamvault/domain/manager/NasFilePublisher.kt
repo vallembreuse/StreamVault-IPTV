@@ -18,6 +18,14 @@ class NasFilePublisher @Inject constructor(
         connection: NasSftpConnection,
         source: NasTransferSource,
         finalPath: String
+    ): NasPublicationResult =
+        publish(connection, source, finalPath) { _ -> }
+
+    suspend fun publish(
+        connection: NasSftpConnection,
+        source: NasTransferSource,
+        finalPath: String,
+        onProgress: suspend (bytesTransferred: Long) -> Unit
     ): NasPublicationResult {
         val expectedSize = source.sizeBytes
         if (expectedSize < 0L || finalPath.isBlank()) {
@@ -41,7 +49,9 @@ class NasFilePublisher @Inject constructor(
         }
         if (partExists) return NasPublicationResult.Failure(PART_ALREADY_EXISTS)
 
-        val uploadedBytes = when (val result = sftpClient.upload(connection, source, partPath)) {
+        val uploadedBytes = when (
+            val result = sftpClient.upload(connection, source, partPath, onProgress)
+        ) {
             is NasSftpResult.Success -> result.value
             is NasSftpResult.Failure -> return NasPublicationResult.Failure(SFTP_FAILURE, result.error)
             is NasSftpResult.HostKeyConfirmationRequired ->

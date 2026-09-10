@@ -22,7 +22,7 @@ class NasTransferExecutorTest {
         f.assertOutcome(NasTransferStatus.TRANSFERRED, null)
         assertThat(f.repo.row!!.bytesTransferred).isEqualTo(42L)
         val connection = argumentCaptor<NasSftpConnection>()
-        verify(f.publisher, times(1)).publish(connection.capture(), same(f.source), eq("/films/movie.mkv"))
+        verify(f.publisher, times(1)).publish(connection.capture(), same(f.source), eq("/films/movie.mkv"), any())
         assertThat(connection.firstValue.password).isSameInstanceAs(f.password)
         verify(f.factory).fromPersistedDownload("content://movie", "movie.mkv", 42L)
         f.assertZeroed()
@@ -107,7 +107,7 @@ class NasTransferExecutorTest {
     @Test fun `publisher cancellation persists interrupted and propagates original`() = runTest {
         val f = Fixture()
         val cancellation = CancellationException("test cancellation")
-        doThrow(cancellation).whenever(f.publisher).publish(any(), any(), any())
+        doThrow(cancellation).whenever(f.publisher).publish(any(), any(), any(), any())
         try {
             f.executor.execute("id")
             throw AssertionError("Expected cancellation")
@@ -116,7 +116,7 @@ class NasTransferExecutorTest {
         assertThat(f.repo.row!!.completedAt).isNull()
         assertThat(f.repo.row!!.bytesTransferred).isEqualTo(0L)
         f.assertZeroed()
-        verify(f.publisher, times(1)).publish(any(), any(), any())
+        verify(f.publisher, times(1)).publish(any(), any(), any(), any())
     }
 
     @Test fun `real job cancellation during accepted claim persists interrupted without publishing`() = runTest {
@@ -146,7 +146,7 @@ class NasTransferExecutorTest {
         val f = Fixture()
         f.repo.reject = NasTransferStatus.TRANSFERRED
         assertThat(f.executor.execute("id")).isFalse()
-        verify(f.publisher, times(1)).publish(any(), any(), any())
+        verify(f.publisher, times(1)).publish(any(), any(), any(), any())
         f.assertZeroed()
     }
 
@@ -192,7 +192,7 @@ class NasTransferExecutorTest {
             on { fromPersistedDownload(any(), any(), any()) } doReturn source
         }
         val publisher = mock<NasFilePublisher> {
-            onBlocking { publish(any(), any(), any()) } doAnswer {
+            onBlocking { publish(any(), any(), any(), any()) } doAnswer {
                 assertThat(repo.row!!.status).isEqualTo(NasTransferStatus.IN_PROGRESS)
                 result
             }
@@ -223,6 +223,26 @@ class NasTransferExecutorTest {
         override fun observeRecoverableQueue(): Flow<List<NasTransfer>> = error("Unexpected queue access")
         override suspend fun getById(id: String): NasTransfer? = row?.takeIf { it.id == id }
         override suspend fun insert(transfer: NasTransfer) { error("Unexpected insertion") }
+
+        override suspend fun updateProgress(
+            id: String,
+            bytesTransferred: Long,
+            updatedAt: Long
+        ): Boolean {
+            val current = row?.takeIf { it.id == id } ?: return false
+            if (current.status != NasTransferStatus.IN_PROGRESS) return false
+            if (bytesTransferred < current.bytesTransferred || bytesTransferred > current.totalBytes) {
+                return false
+            }
+            if (updatedAt < current.updatedAt) return false
+
+            row = current.copy(
+                bytesTransferred = bytesTransferred,
+                updatedAt = updatedAt
+            )
+            return true
+        }
+
         override suspend fun update(transfer: NasTransfer): Boolean {
             if (transfer.status == reject) return false
             val current = row ?: return false

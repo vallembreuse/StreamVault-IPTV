@@ -56,6 +56,13 @@ interface NasSftpClient {
         remotePath: String
     ): NasSftpResult<Long>
 
+    suspend fun upload(
+        connection: NasSftpConnection,
+        source: NasTransferSource,
+        remotePath: String,
+        onProgress: suspend (bytesTransferred: Long) -> Unit
+    ): NasSftpResult<Long> = upload(connection, source, remotePath)
+
     /**
      * Requests standard SFTP rename, without overwrite flags or destructive fallback.
      * Atomicity and concurrent destination handling depend on the server implementation.
