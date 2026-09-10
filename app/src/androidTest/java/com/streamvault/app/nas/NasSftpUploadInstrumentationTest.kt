@@ -63,10 +63,20 @@ class NasSftpUploadInstrumentationTest {
                 assertTrue("Cannot create local test directory", directory.isDirectory || directory.mkdirs())
                 val localFile = File(directory, name)
                 assertTrue("Cannot exclusively create local test file", localFile.createNewFile())
-                val content = "StreamVault SFTP physical upload test.\n".repeat(128).toByteArray(Charsets.UTF_8)
-                localFile.outputStream().use { it.write(content) }
+                val sizeMiB = InstrumentationRegistry.getArguments()
+                    .getString("streamvaultLiveNasUploadSizeMiB")
+                    ?.toIntOrNull()
+                    ?.takeIf { it > 0 }
+                    ?: 1
+                val targetSize = sizeMiB.toLong() * 1024L * 1024L
+                val block = ByteArray(1024 * 1024) { (it % 251).toByte() }
+                localFile.outputStream().buffered().use { output ->
+                    repeat(sizeMiB) {
+                        output.write(block)
+                    }
+                }
                 val originalSize = localFile.length()
-                assertEquals("Unexpected local test size", content.size.toLong(), originalSize)
+                assertEquals("Unexpected local test size", targetSize, originalSize)
                 assertTrue("Local test file must not be empty", originalSize > 0L)
 
                 val source = LocalFileSource(localFile)
@@ -74,7 +84,15 @@ class NasSftpUploadInstrumentationTest {
                 val connection = NasSftpConnection(settings, password, trust)
                 val client = entry.nasSftpClient()
                 Log.i("NasUploadTest", "file=$name size=$originalSize")
+                val startedAt = System.nanoTime()
                 val uploadedBytes = requireSuccess(client.upload(connection, source, remotePath))
+                val elapsedSeconds = (System.nanoTime() - startedAt) / 1_000_000_000.0
+                val throughputMiBPerSecond =
+                    (uploadedBytes / 1024.0 / 1024.0) / elapsedSeconds
+                Log.i(
+                    "NasUploadTest",
+                    "uploadedBytes=$uploadedBytes elapsedSeconds=$elapsedSeconds throughputMiBPerSecond=$throughputMiBPerSecond"
+                )
                 assertEquals("Uploaded size mismatch", originalSize, uploadedBytes)
                 val remoteSize = requireSuccess(client.getRemoteSize(connection, remotePath))
                     ?: throw AssertionError("Remote test file unavailable")

@@ -37,8 +37,14 @@ import javax.inject.Singleton
 /** SSHJ-backed implementation. Every call runs on Dispatchers.IO and has no UI dependency. */
 @Singleton
 class SshjNasSftpClient internal constructor(
-    private val sshClientFactory: () -> SSHClient
+    private val sshClientFactory: () -> SSHClient,
+    private val remoteOutputStreamFactory: (net.schmizz.sshj.sftp.RemoteFile) -> java.io.OutputStream
 ) : NasSftpClient {
+    internal constructor(sshClientFactory: () -> SSHClient) : this(
+        sshClientFactory,
+        { remote -> remote.RemoteFileOutputStream(0L, 16) }
+    )
+
     @Inject
     constructor() : this({ createAndroidCompatibleSshClient() })
     override suspend fun upload(
@@ -68,28 +74,30 @@ class SshjNasSftpClient internal constructor(
                     remoteFile.use { remote ->
                         val buffer = ByteArray(32 * 1024)
                         var bytesTransferred = 0L
-                        while (true) {
-                            uploadContext.ensureActive()
-                            val read = try {
-                                input.read(buffer)
-                            } catch (cancelled: CancellationException) {
-                                throw cancelled
-                            } catch (_: Exception) {
-                                return@withSftp NasSftpResult.Failure(NasSftpError.UNKNOWN)
+                        remoteOutputStreamFactory(remote).use { output ->
+                            while (true) {
+                                uploadContext.ensureActive()
+                                val read = try {
+                                    input.read(buffer)
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (_: Exception) {
+                                    return@withSftp NasSftpResult.Failure(NasSftpError.UNKNOWN)
+                                }
+                                if (read == -1) break
+                                if (read == 0) continue
+                                uploadContext.ensureActive()
+                                try {
+                                    output.write(buffer, 0, read)
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (error: Exception) {
+                                    return@withSftp NasSftpResult.Failure(error.toDomainError(ConnectionStage.UPLOAD))
+                                }
+                                bytesTransferred += read.toLong()
                             }
-                            if (read == -1) break
-                            if (read == 0) continue
                             uploadContext.ensureActive()
-                            try {
-                                remote.write(bytesTransferred, buffer, 0, read)
-                            } catch (cancelled: CancellationException) {
-                                throw cancelled
-                            } catch (error: Exception) {
-                                return@withSftp NasSftpResult.Failure(error.toDomainError(ConnectionStage.UPLOAD))
-                            }
-                            bytesTransferred += read.toLong()
                         }
-                        uploadContext.ensureActive()
                         if (bytesTransferred == expectedSize) {
                             NasSftpResult.Success(bytesTransferred)
                         } else {
