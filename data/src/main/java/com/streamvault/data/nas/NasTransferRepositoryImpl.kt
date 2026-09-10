@@ -42,6 +42,29 @@ class NasTransferRepositoryImpl @Inject constructor(
         dao.insert(NasTransferEntity.fromDomain(transfer))
     }
 
+    override suspend fun updateProgress(
+        id: String,
+        bytesTransferred: Long,
+        updatedAt: Long
+    ): Boolean = database.withTransaction {
+        val current = dao.getById(id)?.toDomain() ?: return@withTransaction false
+        if (current.status != NasTransferStatus.IN_PROGRESS) return@withTransaction false
+        if (bytesTransferred < current.bytesTransferred || bytesTransferred > current.totalBytes) {
+            return@withTransaction false
+        }
+        if (updatedAt < current.updatedAt) return@withTransaction false
+
+        dao.update(
+            NasTransferEntity.fromDomain(
+                current.copy(
+                    bytesTransferred = bytesTransferred,
+                    updatedAt = updatedAt
+                )
+            )
+        )
+        true
+    }
+
     override suspend fun update(transfer: NasTransfer): Boolean = database.withTransaction {
         val current = dao.getById(transfer.id)?.toDomain() ?: return@withTransaction false
         if (current.status == transfer.status || !current.status.canTransitionTo(transfer.status)) {

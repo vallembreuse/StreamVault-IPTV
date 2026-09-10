@@ -105,6 +105,80 @@ class NasTransferRepositoryImplTest {
         assertEquals(next, repository.getById(t.id))
     }
 
+    @Test fun progressUpdateIsPersistedWithoutChangingStatus() = runBlocking {
+        val t = transfer()
+        repository.insert(t)
+        val active = t.inState(IN_PROGRESS)
+        assertTrue(repository.update(active))
+
+        assertTrue(repository.updateProgress(t.id, 21, active.updatedAt + 1))
+
+        val persisted = repository.getById(t.id)!!
+        assertEquals(IN_PROGRESS, persisted.status)
+        assertEquals(21L, persisted.bytesTransferred)
+        assertEquals(42L, persisted.totalBytes)
+        assertEquals(active.updatedAt + 1, persisted.updatedAt)
+    }
+
+    @Test fun progressUpdateRejectsBackwardAndOversizedValues() = runBlocking {
+        val t = transfer()
+        repository.insert(t)
+        val active = t.inState(IN_PROGRESS)
+        assertTrue(repository.update(active))
+        assertTrue(repository.updateProgress(t.id, 21, active.updatedAt + 1))
+
+        assertFalse(repository.updateProgress(t.id, 20, active.updatedAt + 2))
+        assertFalse(repository.updateProgress(t.id, 43, active.updatedAt + 2))
+
+        assertEquals(21L, repository.getById(t.id)!!.bytesTransferred)
+    }
+
+    @Test fun progressUpdateIsRejectedOutsideInProgress() = runBlocking {
+        val t = transfer()
+        repository.insert(t)
+
+        assertFalse(repository.updateProgress(t.id, 10, t.updatedAt + 1))
+        assertFalse(repository.updateProgress("missing", 10, t.updatedAt + 1))
+
+        assertEquals(t, repository.getById(t.id))
+    }
+
+    @Test fun progressDoesNotPreventTransferredTransition() = runBlocking {
+        val t = transfer()
+        repository.insert(t)
+        val active = t.inState(IN_PROGRESS)
+        assertTrue(repository.update(active))
+        assertTrue(repository.updateProgress(t.id, 21, active.updatedAt + 1))
+
+        val finished = active.copy(
+            status = TRANSFERRED,
+            bytesTransferred = active.totalBytes,
+            updatedAt = active.updatedAt + 2,
+            completedAt = active.updatedAt + 2
+        )
+
+        assertTrue(repository.update(finished))
+        assertEquals(finished, repository.getById(t.id))
+    }
+
+    @Test fun progressDoesNotPreventFailedTransition() = runBlocking {
+        val t = transfer()
+        repository.insert(t)
+        val active = t.inState(IN_PROGRESS)
+        assertTrue(repository.update(active))
+        assertTrue(repository.updateProgress(t.id, 21, active.updatedAt + 1))
+
+        val failed = active.copy(
+            status = FAILED,
+            bytesTransferred = 0,
+            lastError = "TRANSFER_ERROR",
+            updatedAt = active.updatedAt + 2
+        )
+
+        assertTrue(repository.update(failed))
+        assertEquals(failed, repository.getById(t.id))
+    }
+
     @Test fun inProgressToTransferredPreservesAllFields() = runBlocking {
         val t = transfer()
         repository.insert(t)

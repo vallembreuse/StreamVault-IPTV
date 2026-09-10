@@ -31,6 +31,12 @@ interface NasTransferRepository {
     suspend fun getById(id: String): NasTransfer?
     suspend fun insert(transfer: NasTransfer)
 
+    /**
+     * Persists monotonic byte progress for an existing IN_PROGRESS transfer without changing
+     * its status or any other business field.
+     */
+    suspend fun updateProgress(id: String, bytesTransferred: Long, updatedAt: Long): Boolean
+
     /** Returns false for a missing row or rejected business change; storage errors propagate. */
     suspend fun update(transfer: NasTransfer): Boolean
 }
