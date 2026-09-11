@@ -1515,6 +1515,10 @@
     <string name="settings_remote_dialog_title">%1$s action</string>
     <string name="settings_remote_dialog_subtitle">Choose what this colored button should do in %1$s.</string>
     <string name="downloads_transfer_to_nas">Transférer vers le NAS</string>
+    <string name="downloads_nas_progress">Transfert vers le NAS — %1$d %%</string>
+    <string name="downloads_nas_in_progress">Transfert vers le NAS en cours…</string>
+    <string name="downloads_nas_completed">✓ Transféré vers le NAS</string>
+    <string name="downloads_nas_present">✓ Déjà présent sur le NAS</string>
     <string name="downloads_nas_source_unavailable">Le fichier téléchargé est indisponible.</string>
     <string name="downloads_nas_configuration_required">Activez et configurez le NAS dans les paramètres.</string>
     <string name="downloads_nas_transferred">Transfert vers le NAS terminé. Le fichier local est conservé.</string>

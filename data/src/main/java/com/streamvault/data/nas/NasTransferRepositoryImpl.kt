@@ -18,6 +18,9 @@ class NasTransferRepositoryImpl @Inject constructor(
 ) : NasTransferRepository {
     private val dao = database.nasTransferDao()
 
+    override fun observeAll(): Flow<List<NasTransfer>> =
+        dao.observeAll().map { rows -> rows.map { it.toDomain() } }
+
     override fun observeRecoverableQueue(): Flow<List<NasTransfer>> = dao.observeAll().map { rows ->
         rows.filter {
             it.status == NasTransferStatus.PENDING || it.status == NasTransferStatus.IN_PROGRESS ||

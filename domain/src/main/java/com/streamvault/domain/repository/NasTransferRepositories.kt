@@ -27,6 +27,7 @@ interface NasCredentialStore {
 
 /** Persistent NAS ledger. Callers supply identity, timestamps and non-sensitive business errors. */
 interface NasTransferRepository {
+    fun observeAll(): Flow<List<NasTransfer>>
     fun observeRecoverableQueue(): Flow<List<NasTransfer>>
     suspend fun getById(id: String): NasTransfer?
     suspend fun insert(transfer: NasTransfer)

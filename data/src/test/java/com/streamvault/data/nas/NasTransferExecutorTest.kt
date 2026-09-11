@@ -220,6 +220,7 @@ class NasTransferExecutorTest {
         val updates = mutableListOf<NasTransfer>()
         var reject: NasTransferStatus? = null
         var afterClaim: (() -> Unit)? = null
+        override fun observeAll(): Flow<List<NasTransfer>> = error("Unexpected all-transfers access")
         override fun observeRecoverableQueue(): Flow<List<NasTransfer>> = error("Unexpected queue access")
         override suspend fun getById(id: String): NasTransfer? = row?.takeIf { it.id == id }
         override suspend fun insert(transfer: NasTransfer) { error("Unexpected insertion") }

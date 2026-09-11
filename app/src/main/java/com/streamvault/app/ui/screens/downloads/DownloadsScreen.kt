@@ -56,6 +56,9 @@ import com.streamvault.app.ui.components.shell.AppScreenScaffold
 import com.streamvault.app.ui.design.AppColors
 import com.streamvault.domain.model.DownloadItem
 import com.streamvault.domain.model.DownloadStatus
+import com.streamvault.domain.model.NasTransfer
+import com.streamvault.domain.model.NasTransferStatus
+import kotlin.math.roundToInt
 
 @Composable
 fun DownloadsScreen(
@@ -124,7 +127,9 @@ fun DownloadsScreen(
                         onResumeClick = viewModel::resumeDownload,
                         onDeleteClick = viewModel::showDeleteConfirm,
                         onNasClick = viewModel::transferToNas,
-                        nasTransferInProgress = uiState.nasTransferInProgress
+                        nasTransferActionEnabled = uiState.isNasTransferActionEnabled,
+                        nasTransfersByDownloadId = uiState.nasTransfersByDownloadId,
+                        isNasTransfersLoading = uiState.isNasTransfersLoading
                     )
                 }
             }
@@ -202,7 +207,9 @@ private fun DownloadsGrid(
     onResumeClick: (DownloadItem) -> Unit,
     onDeleteClick: (DownloadItem) -> Unit,
     onNasClick: (DownloadItem) -> Unit,
-    nasTransferInProgress: Boolean
+    nasTransferActionEnabled: Boolean,
+    nasTransfersByDownloadId: Map<String, NasTransfer>,
+    isNasTransfersLoading: Boolean
 ) {
     val columns = if (LocalConfiguration.current.screenWidthDp < 700) {
         GridCells.Adaptive(180.dp)
@@ -224,7 +231,9 @@ private fun DownloadsGrid(
                 onResumeClick = { onResumeClick(download) },
                 onDeleteClick = { onDeleteClick(download) },
                 onNasClick = { onNasClick(download) },
-                nasTransferInProgress = nasTransferInProgress
+                nasTransferActionEnabled = nasTransferActionEnabled,
+                nasTransfer = nasTransfersByDownloadId[download.id],
+                isNasTransfersLoading = isNasTransfersLoading
             )
         }
     }
@@ -237,7 +246,9 @@ private fun DownloadCard(
     onResumeClick: () -> Unit,
     onDeleteClick: () -> Unit,
     onNasClick: () -> Unit,
-    nasTransferInProgress: Boolean
+    nasTransferActionEnabled: Boolean,
+    nasTransfer: NasTransfer?,
+    isNasTransfersLoading: Boolean
 ) {
     val progress = download.totalBytes?.takeIf { it > 0L }?.let { total ->
         (download.bytesWritten.toFloat() / total.toFloat()).coerceIn(0f, 1f)
@@ -319,8 +330,11 @@ private fun DownloadCard(
                 )
             }
 
-            if (download.canTransferToNas()) {
-                TextButton(onClick = onNasClick, enabled = !nasTransferInProgress) {
+            if (download.status == DownloadStatus.COMPLETED && nasTransfer != null) {
+                NasTransferProgress(nasTransfer)
+            }
+            if (!isNasTransfersLoading && download.canTransferToNas(nasTransfer)) {
+                TextButton(onClick = onNasClick, enabled = nasTransferActionEnabled) {
                     Text(stringResource(R.string.downloads_transfer_to_nas))
                 }
             }
@@ -340,6 +354,53 @@ private fun DownloadCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun NasTransferProgress(transfer: NasTransfer) {
+    when (transfer.status) {
+        NasTransferStatus.PENDING, NasTransferStatus.IN_PROGRESS -> {
+            val progress = transfer.progressFraction()
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = if (progress != null) {
+                        stringResource(R.string.downloads_nas_progress, (progress * 100).roundToInt())
+                    } else {
+                        stringResource(R.string.downloads_nas_in_progress)
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = AppColors.TextSecondary
+                )
+                if (progress != null) {
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.fillMaxWidth().height(4.dp),
+                        color = AppColors.Brand,
+                        trackColor = AppColors.SurfaceElevated
+                    )
+                } else {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth().height(4.dp),
+                        color = AppColors.Brand,
+                        trackColor = AppColors.SurfaceElevated
+                    )
+                }
+            }
+        }
+        NasTransferStatus.TRANSFERRED, NasTransferStatus.ALREADY_PRESENT -> Text(
+            text = stringResource(
+                if (transfer.status == NasTransferStatus.TRANSFERRED) R.string.downloads_nas_completed
+                else R.string.downloads_nas_present
+            ),
+            style = MaterialTheme.typography.labelSmall,
+            color = AppColors.Success,
+            modifier = Modifier.padding(top = 8.dp)
+        )
+        else -> Unit
     }
 }
 

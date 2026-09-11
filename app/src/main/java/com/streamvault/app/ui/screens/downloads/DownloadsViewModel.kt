@@ -60,11 +60,35 @@ class DownloadsViewModel @Inject constructor(
                 _uiState.update { it.copy(storageConfig = storageConfig) }
             }
         }
+
+        viewModelScope.launch {
+            nasTransfers.observeAll().collect { transfers ->
+                val latestByDownloadId = mutableMapOf<String, NasTransfer>()
+                transfers.forEach { transfer ->
+                    val downloadId = transfer.downloadId ?: return@forEach
+                    val current = latestByDownloadId[downloadId]
+                    if (
+                        current == null ||
+                        transfer.createdAt > current.createdAt ||
+                        (transfer.createdAt == current.createdAt && transfer.updatedAt > current.updatedAt)
+                    ) {
+                        latestByDownloadId[downloadId] = transfer
+                    }
+                }
+                _uiState.update {
+                    it.copy(nasTransfersByDownloadId = latestByDownloadId, isNasTransfersLoading = false)
+                }
+            }
+        }
     }
 
     fun transferToNas(item: DownloadItem) {
         val download = _uiState.value.downloads.find { it.id == item.id } ?: return
-        if (!item.canTransferToNas() || !download.canTransferToNas() || _uiState.value.nasTransferInProgress) return
+        val state = _uiState.value
+        if (!item.canTransferToNas() ||
+            !download.canTransferToNas(state.nasTransfersByDownloadId[download.id]) ||
+            state.isNasTransfersLoading || state.nasTransferInProgress || state.hasActiveNasTransfer
+        ) return
         _uiState.update { it.copy(nasTransferInProgress = true) }
         viewModelScope.launch(Dispatchers.IO) {
             try {
