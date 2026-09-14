@@ -34,6 +34,14 @@
 -keepnames class okhttp3.internal.platform.**
 -keepnames class okhttp3.internal.tls.**
 
+# ── SSHJ / BouncyCastle JCA services ─────────────────────────
+# BC builds the names of $Mappings and JCA implementations at runtime.
+# Preserve their names and public constructors; otherwise release SFTP fails
+# before host-key verification with "ECDSA KeyFactory not available".
+-keep,allowoptimization class org.bouncycastle.jcajce.provider.** {
+    public <init>(...);
+}
+
 # ── GSON ────────────────────────────────────────────────────
 -keepattributes Signature
 -keepattributes EnclosingMethod
